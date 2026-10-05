@@ -23,7 +23,7 @@ foreach ($entry in $environment) {
     }
 }
 function Find-BuildTool([string]$Name, [string]$BundledPath) {
-    $command = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue
+    $command = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($command) { return $command.Source }
     if (Test-Path -LiteralPath $BundledPath) { return $BundledPath }
     throw "Required tool missing: $Name. Install the C++ CMake tools for Windows component in Visual Studio Installer."
