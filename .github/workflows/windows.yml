@@ -1,0 +1,47 @@
+name: Windows build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Windows x64 / ${{ matrix.configuration }}
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and run tests
+        shell: pwsh
+        run: ./tools/build.ps1 -Configuration '${{ matrix.configuration }}'
+      - name: Package Release executables
+        if: matrix.configuration == 'Release'
+        shell: pwsh
+        run: |
+          Compress-Archive -LiteralPath @(
+            'build/Release/wmembed.exe',
+            'build/Release/wmdetect.exe',
+            'build/Release/wmgui.exe',
+            'LICENSE',
+            'README.md'
+          ) -DestinationPath 'build/Watermark-windows-x64.zip'
+      - name: Upload Release archive
+        if: matrix.configuration == 'Release'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Watermark-windows-x64
+          path: build/Watermark-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14

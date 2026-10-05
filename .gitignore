@@ -1,0 +1,17 @@
+/build/
+/test-output/
+/.vs/
+/out/
+/selftest-*/
+/cli test-*/
+/gui-test-*/
+/wmgui-embed.png
+/wmgui-detect.png
+/secret.txt
+/key.txt
+/photos/
+/stamped/
+/report.csv
+CMakeUserPresets.json
+*.user
+*.tmp-*
