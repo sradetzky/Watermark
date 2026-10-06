@@ -6,6 +6,11 @@ Watermark is a native Windows C++20 project. Read
 `README.md` for usage and `PLAN.md` for the product contract and remaining work.
 The source image defines a short watermark identity; it is not embedded as a
 recoverable picture.
+Since v0.2.1, in user-facing text call it **Watermark image**: it is the watermark artwork,
+never the original host photo. GUI visible mode uses this same file for its stamp;
+default detection needs only that artwork and the inspected image. The CLI prefers
+`--watermark` and `--visible`; `--source` and `--visible-image` remain compatible.
+Internal `Job::source`, source hashes, and `source-v1` keep their existing semantics.
 
 Implemented:
 

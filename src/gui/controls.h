@@ -5,6 +5,6 @@ enum ControlId {
     input, input_browse, input_folder, key, key_kind, key_browse,
     output, output_browse, strength, format, quality, recursive, force,
     run, cancel, export_csv, status, progress, results, log,
-    visible, visible_image, visible_browse, visible_position, visible_size, visible_opacity, visible_ink
+    visible, visible_position, visible_size, visible_opacity, visible_ink
 };
 }

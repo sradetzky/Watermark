@@ -38,13 +38,13 @@ void export_report(const Job& job, const fs::path& destination, const std::strin
 Summary run_job(const Job& job, const Progress& progress) {
     if (job.input.empty() || (job.embedding && job.output.empty()) ||
         (job.embedding ? job.source.empty() : job.source.empty() == job.mark.empty())) {
-        throw std::invalid_argument("Choose input, identity, and an output folder for embedding.");
+        throw std::invalid_argument("Choose an input image/folder and watermark image or manifest; embedding also needs an output folder.");
     }
     if (job.jpeg_quality < 1 || job.jpeg_quality > 100) { throw std::invalid_argument("JPEG quality must be 1..100."); }
     auto params = job.parameters;
     if (!job.key_file.empty() && params.passphrase.empty()) { params.passphrase = read_key_file(job.key_file); }
     if (job.key_from_source && (!job.key_file.empty() || !params.passphrase.empty())) {
-        throw std::invalid_argument("Source identity mode cannot also use a passphrase or key file.");
+        throw std::invalid_argument("Watermark identity mode cannot also use a passphrase or key file.");
     }
     Summary summary;
     if (params.cancelled && params.cancelled()) { summary.cancelled = true; return summary; }
@@ -61,7 +61,7 @@ Summary run_job(const Job& job, const Progress& progress) {
         const auto mark = read_mark(job.mark);
         payload = mark.payload;
         if (mark.key_from_source && (!job.key_file.empty() || !params.passphrase.empty())) {
-            throw std::invalid_argument("This manifest uses source identity; omit the passphrase/key file.");
+            throw std::invalid_argument("This manifest uses watermark identity; omit the passphrase/key file.");
         }
         if (!mark.key_from_source && source_key) {
             throw std::invalid_argument("This legacy manifest requires its original passphrase or key file.");

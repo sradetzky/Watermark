@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Watermark VERSION 0.2.0 LANGUAGES CXX)
+project(Watermark VERSION 0.2.1 LANGUAGES CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "Watermark requires Windows (WIC and BCrypt).")

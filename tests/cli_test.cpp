@@ -169,19 +169,31 @@ int main() {
         require(run(embed, {L"--source", L"source.png", L"--key-file", L"secret.txt", L"--in", L"photos/photo, one.png",
                 L"--out", L"invalid-visible", L"--visible-image", L"source.png"}, root) == 2 &&
                 !fs::exists(root / "invalid-visible" / "mark.json"), "CLI rejects opaque visible input before creating output");
-        require(run(embed, {L"--source", L"silhouette.png", L"--in", L"photos/photo, one.png", L"--out", L"source-visible",
-                L"--visible-image", L"silhouette.png"}, root) == 0 &&
+        require(run(embed, {L"--watermark", L"silhouette.png", L"--in", L"photos/photo, one.png", L"--out", L"source-visible",
+                L"--visible"}, root) == 0 &&
                 read(root / "source-visible" / "mark.json").find("\"key_mode\": \"source-v1\"") != std::string::npos,
-                "CLI derives key from transparent source and records its mode");
+                "CLI uses one watermark image for visible artwork and detection identity");
         const auto subtle_image = wm::load_image(root / "source-visible" / "photo, one.png.png");
         require(std::abs(int(subtle_image.at(480, 470).r) - int(original.at(480, 470).r) / 2) <= 8,
                 "CLI defaults to translucent black at 50 percent with small keyed changes");
         require(run(detect, {L"--mark", L"source-visible/mark.json", L"--in", L"source-visible", L"--report", L"source-visible.csv"}, root) == 0 &&
                 read(root / "source-visible.csv").find(",present,1.000000,") != std::string::npos,
                 "CLI detects source-key mark from manifest without a passphrase");
-        require(run(detect, {L"--source", L"silhouette.png", L"--in", L"source-visible/photo, one.png.png", L"--report", L"source-identity.csv"}, root) == 0 &&
+        fs::rename(root / "photos" / "photo, one.png", root / "unavailable-original.png");
+        fs::rename(root / "source-visible" / "mark.json", root / "unavailable-manifest.json");
+        require(run(detect, {L"--watermark", L"silhouette.png", L"--in", L"source-visible/photo, one.png.png", L"--report", L"source-identity.csv"}, root) == 0 &&
                 read(root / "source-identity.csv").find(",true,") != std::string::npos,
-                "CLI detects source-key mark directly from transparent silhouette");
+                "CLI detects using only stamped image and watermark without original photo, manifest, or secret");
+        fs::rename(root / "unavailable-original.png", root / "photos" / "photo, one.png");
+        fs::rename(root / "unavailable-manifest.json", root / "source-visible" / "mark.json");
+        require(run(detect, {L"--source", L"silhouette.png", L"--in", L"source-visible/photo, one.png.png", L"--report", L"legacy-alias.csv"}, root) == 0 &&
+                read(root / "legacy-alias.csv").find(",true,") != std::string::npos, "CLI preserves --source alias for existing marks");
+        require(run(detect, {L"--watermark", L"silhouette.png", L"--source", L"source.png", L"--in", L"photos"}, root) == 2 &&
+                run(detect, {L"--watermark", L"silhouette.png", L"--mark", L"source-visible/mark.json", L"--in", L"photos"}, root) == 2,
+                "CLI rejects ambiguous watermark identity options");
+        require(run(embed, {L"--watermark", L"silhouette.png", L"--visible", L"--visible-image", L"silhouette.png",
+                L"--in", L"photos/photo, one.png", L"--out", L"ambiguous-visible"}, root) == 2,
+                "CLI rejects ambiguous visible artwork options");
         require(run(detect, {L"--source", L"source.png", L"--in", L"source-visible/photo, one.png.png", L"--report", L"other-source.csv"}, root) == 0 &&
                 read(root / "other-source.csv").find(",absent,") != std::string::npos,
                 "Another image cannot identify a source-key mark");

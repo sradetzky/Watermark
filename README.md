@@ -2,7 +2,7 @@
 
 [![Windows build and test](https://github.com/sradetzky/Watermark/actions/workflows/windows.yml/badge.svg)](https://github.com/sradetzky/Watermark/actions/workflows/windows.yml)
 
-Experimental Windows tools that stamp a mark into images and later test whether that mark is still there. The mark is derived from a source image, with an optional private passphrase. The project targets recovery after compression and ordinary photo edits; broader real-photo validation is still pending.
+Experimental Windows tools that stamp a mark into images and later test whether that mark is still there. The mark is derived from your watermark artwork, with an optional private passphrase. Detection needs the image to inspect and that artwork, without the original photo. The project targets recovery after compression and ordinary photo edits; broader real-photo validation is still pending.
 
 The core library, both command-line tools, and the Win32 window are implemented. Behavior and the robustness target are written down in [PLAN.md](PLAN.md); working context for future sessions is in [AGENTS.md](AGENTS.md).
 
@@ -10,13 +10,13 @@ The core library, both command-line tools, and the Win32 window are implemented.
 
 | Tool | Role |
 |---|---|
-| `wmembed` | Turn a source image into a payload and embed it in one file or a folder of images. |
-| `wmdetect` | Recover that payload from one file or a folder and report whether it matches the source. |
+| `wmembed` | Turn watermark artwork into a payload and embed it in one file or a folder of images. |
+| `wmdetect` | Recover that payload from one file or a folder and report whether it matches the watermark. |
 | `wmgui` | Embed and detect through a native Windows interface. |
 
 All three programs use the same core library and batch operations. They support single-file and folder runs.
 
-The source image is the identity of the mark. The tools embed a short redundant payload built from a robust hash of that image. An optional visible silhouette can also appear on the photo; it is accompanied by the detectable payload.
+The watermark image is the identity of the mark. The tools embed a short redundant payload built from a robust hash of that artwork. An optional visible silhouette can also appear on the photo; it is accompanied by the detectable payload.
 
 ## Robustness target
 
@@ -88,10 +88,12 @@ Start the graphical interface with:
 .\build\Release\wmgui.exe
 ```
 
-The **Embed** page takes a source image, input image/folder, output folder, secret,
-strength, and PNG/JPEG settings. The **Detect** page accepts a source image or
-`mark.json` and shows a result row for each file. **Source identity** is the default
-detection key mode: no passphrase is needed. You can also select a masked passphrase
+The **Embed** page takes your watermark image, the photo/folder to watermark, an output
+folder, strength, and PNG/JPEG settings. The **Detect** page takes the same **Watermark
+image** and the **Image or folder to inspect**, then shows a result row for each file.
+The original unmarked photo is never required. **Watermark identity** is the default
+detection key mode: no passphrase or manifest is needed, and no secret field is shown.
+`mark.json` remains an alternative to the watermark image. You can also select a masked passphrase
 or a UTF-8 key file for private-key mode and existing v0.1.0 marks.
 Native file/folder pickers fill the paths; subfolders are optional.
 Processing runs in the background, with a log, file progress, and **Cancel**.
@@ -102,8 +104,9 @@ a report automatically.
 
 ### Visible silhouette
 
-On the Embed page, check **Visible watermark** and choose a transparent silhouette
-PNG. The alpha channel defines the shape; the tool renders it black or white, preserving
+On the Embed page, choose a transparent silhouette PNG as the **Watermark image**
+and check **Visible watermark**. The same file supplies the visible shape and detection
+identity. The alpha channel defines the shape; the tool renders it black or white, preserving
 transparent openings and trimming empty borders. Prepare the cutout before using
 it: the application does not segment a person from a landscape JPEG automatically.
 Opaque photographs and entirely empty cutouts are rejected.
@@ -116,8 +119,8 @@ margin. The original aspect ratio is retained. Uncheck visibility for the origin
 invisible-only workflow.
 
 The visible stamp is applied before embedding the detectable payload. Detection
-uses the same source image or `mark.json`; it needs no position setting or visible
-stamp image. It can recover a payload even if a crop removes the visible corner,
+uses the same watermark PNG; `mark.json` is optional. It needs no original photo,
+position setting, or opacity setting. It can recover a payload even if a crop removes the visible corner,
 provided enough marked image remains. A silhouette pasted by another application
 without the payload does not establish a detected mark. PSNR logged in visible
 mode measures only the keyed change against the already stamped image.
@@ -127,31 +130,33 @@ mode measures only the keyed change against the already stamped image.
 Default usage needs no secret:
 
 ```powershell
-.\build\Release\wmembed.exe --source silhouette.png --visible-image silhouette.png --visible-position bottom-right --in photo.jpg --out stamped
-.\build\Release\wmdetect.exe --mark stamped/mark.json --in stamped --report report.csv
+.\build\Release\wmembed.exe --watermark silhouette.png --visible --visible-position bottom-right --in photo.jpg --out stamped
+.\build\Release\wmdetect.exe --watermark silhouette.png --in stamped/photo.jpg.png
 ```
 
-Omit `--visible-image` for invisible-only output. Optional `--visible-size` and
+Omit `--visible` for invisible-only output. Optional `--visible-size` and
 `--visible-opacity` use the same percentages as the GUI. `--visible-color black|white`
-selects the ink. You may use different
-images for the payload identity (`--source`) and the visible shape (`--visible-image`).
+selects the ink. Use `--in stamped --report report.csv` for batch detection.
+The legacy `--source` spelling remains an alias for `--watermark`.
+Advanced CLI usage can still choose different artwork with `--visible-image` instead
+of `--visible`; detection then requires the identity artwork or its manifest.
 
 Source-key mode composites source transparency onto white before computing its
 64-bit perceptual identity, then uses `Watermark/source-key/v1/` followed by the
 16 lowercase hexadecimal hash digits as the input to the existing keyed pattern.
 The manifest records `key_mode: source-v1` and lets detection derive the same key.
-This is public identification, not private authentication: the source or manifest
+This is public identification, not private authentication: the watermark or manifest
 is sufficient to reproduce a mark, and the perceptual identity can collide.
-Keep the same source file or the manifest for later detection.
+Keep the same watermark artwork for later detection; the manifest is an optional substitute.
 
 For private-key mode, put the passphrase in a single UTF-8 line in `secret.txt`, then run:
 
 ```powershell
-.\build\Release\wmembed.exe --source logo.png --key-file secret.txt --in photos --out stamped
+.\build\Release\wmembed.exe --watermark logo.png --key-file secret.txt --in photos --out stamped
 .\build\Release\wmdetect.exe --mark stamped/mark.json --key-file secret.txt --in stamped --report report.csv
 ```
 
-Detection also accepts `--source logo.png` instead of `--mark`. `mark.json` keeps the original source hash and format parameters; it contains no passphrase. Existing v0.1.0 manifests require their original secret. Private-key mode retains the v0.1.0 hash and payload behavior. Source-key mode requires v0.2.0; its optional manifest field is rejected by v0.1.0 readers, while the embedded payload format remains version 1. An output folder cannot change source identity or key mode without `--force`.
+Detection also accepts `--watermark logo.png` instead of `--mark`. `mark.json` keeps the original watermark hash and format parameters; it contains no passphrase. Existing v0.1.0 manifests require their original secret. Private-key mode retains the v0.1.0 hash and payload behavior. Source-key mode requires v0.2.0; its optional manifest field is rejected by v0.1.0 readers, while the embedded payload format remains version 1. An output folder cannot change watermark identity or key mode without `--force`. For older marks made with different identity and visible images, retain the original identity artwork or use the saved manifest.
 
 Use `--recursive` for subdirectories. Embed defaults to PNG; add `--format jpeg --quality 70` for JPEG, or `--strength low|default|high` to change strength. Output names append an extension to the complete input name, so `photo.jpg` becomes `photo.jpg.png`. Input images are preserved. Existing outputs require `--force`; an input already carrying the same mark is skipped unless forced.
 

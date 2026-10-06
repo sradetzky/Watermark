@@ -138,17 +138,17 @@ int main(int argc, char** argv) {
         const auto& root = fixtures.path;
         wchar_t executable[32768]{}; GetModuleFileNameW(nullptr, executable, 32768);
         GuiProcess gui(fs::path(executable).parent_path() / "wmgui.exe", root);
-        require(!IsWindowEnabled(gui.control(ids::key)), "GUI defaults to source identity without a passphrase");
+        require(!IsWindowEnabled(gui.control(ids::key)) && !(GetWindowLongW(gui.control(ids::key), GWL_STYLE) & WS_VISIBLE),
+                "GUI defaults to watermark identity without showing a secret field");
         gui.selection(ids::key_kind, 0);
         require(SendMessageW(gui.control(ids::key), EM_GETPASSWORDCHAR, 0, 0) != 0, "Passphrase is masked");
-        gui.set(ids::identity, (root / "source.png").wstring()); gui.set(ids::input, (root / "host.png").wstring());
+        gui.set(ids::identity, (root / "silhouette.png").wstring()); gui.set(ids::input, (root / "host.png").wstring());
         gui.set(ids::output, (root / "stamped").wstring()); gui.set(ids::key, L"GUI secret");
-        require(!IsWindowEnabled(gui.control(ids::visible_image)), "Visible controls disabled by default");
+        require(!IsWindowEnabled(gui.control(ids::visible_position)), "Visible controls disabled by default");
         gui.click(ids::visible);
-        require(IsWindowEnabled(gui.control(ids::visible_image)), "Visibility checkbox enables silhouette settings");
+        require(IsWindowEnabled(gui.control(ids::visible_position)), "Visibility checkbox enables silhouette settings");
         require(gui.text(ids::visible_opacity) == L"50" && SendMessageW(gui.control(ids::visible_ink), CB_GETCURSEL, 0, 0) == 0,
                 "GUI defaults to black at 50 percent opacity");
-        gui.set(ids::visible_image, (root / "silhouette.png").wstring());
         gui.selection(ids::visible_position, 1); gui.set(ids::visible_size, L"20"); gui.set(ids::visible_opacity, L"50");
         gui.selection(ids::key_kind, 2);
         gui.set(ids::output, (root / "source-key").wstring());
@@ -158,13 +158,29 @@ int main(int argc, char** argv) {
                 "GUI embeds visible mark without a passphrase");
         require(wm::load_image(root / "source-key" / "host.png.png").at(40, 460).r <
                 wm::load_image(root / "host.png").at(40, 460).r - 10, "GUI applies translucent black silhouette");
-        gui.detect_page(); gui.selection(ids::identity_kind, 1);
+        gui.detect_page();
+        gui.set(ids::input, (root / "source-key" / "host.png.png").wstring());
+        fs::rename(root / "host.png", root / "unavailable-original.png");
+        fs::rename(root / "source-key" / "mark.json", root / "unavailable-manifest.json");
+        gui.click(ids::run); gui.done();
+        require(gui.text(ids::log).find(L"match=true") != std::wstring::npos,
+                "GUI detects with only stamped image and watermark artwork, without original photo or manifest");
+        if (capture) { gui.screenshot(fs::absolute("wmgui-detect.png")); }
+        gui.set(ids::identity, (root / "source.png").wstring()); gui.click(ids::run); gui.done();
+        require(gui.text(ids::log).find(L"absent ") != std::wstring::npos && gui.text(ids::log).find(L"match=true") == std::wstring::npos,
+                "GUI rejects a different watermark artwork");
+        gui.set(ids::identity, (root / "silhouette.png").wstring()); gui.set(ids::input, (root / "unavailable-original.png").wstring());
+        gui.click(ids::run); gui.done();
+        require(gui.text(ids::log).find(L"absent ") != std::wstring::npos, "GUI rejects an unmarked photo");
+        fs::rename(root / "unavailable-original.png", root / "host.png");
+        fs::rename(root / "unavailable-manifest.json", root / "source-key" / "mark.json");
+        gui.selection(ids::identity_kind, 1);
         gui.set(ids::identity, (root / "source-key" / "mark.json").wstring()); gui.set(ids::input, (root / "source-key").wstring());
         gui.click(ids::run); gui.done();
         require(gui.text(ids::log).find(L"match=true") != std::wstring::npos, "GUI detects source-key manifest without a passphrase");
         SendMessageW(gui.control(ids::tabs), WM_KEYDOWN, VK_LEFT, 0);
         until([&] { return gui.text(ids::run) == L"Embed"; }, 10000);
-        gui.set(ids::identity, (root / "source.png").wstring()); gui.set(ids::input, (root / "host.png").wstring());
+        gui.set(ids::identity, (root / "silhouette.png").wstring()); gui.set(ids::input, (root / "host.png").wstring());
         gui.set(ids::output, (root / "stamped").wstring()); gui.selection(ids::key_kind, 0); gui.set(ids::key, L"GUI secret");
         gui.selection(ids::visible_ink, 1);
         gui.set(ids::visible_opacity, L"75");
@@ -172,7 +188,7 @@ int main(int argc, char** argv) {
         require(!IsWindowEnabled(gui.control(ids::run)) && IsWindowEnabled(gui.control(ids::cancel)), "Worker disables editing and enables cancel");
         gui.done();
         require(gui.text(ids::status).rfind(L"Completed", 0) == 0 && fs::exists(root / "stamped" / "host.png.png"), "GUI embeds an image");
-        const auto payload = wm::payload_from_source(wm::load_image(root / "source.png"));
+        const auto payload = wm::payload_from_source(wm::load_image(root / "silhouette.png"));
         require(wm::detect(wm::load_image(root / "stamped" / "host.png.png"), payload, {"GUI secret"}).hash_matches == true,
                 "GUI output contains expected mark");
         require(wm::load_image(root / "stamped" / "host.png.png").at(40, 460).r >
@@ -185,7 +201,6 @@ int main(int argc, char** argv) {
                 "GUI detects via manifest and enables CSV export");
         require(gui.text(ids::log).find(L"match=true") != std::wstring::npos, "GUI log shows source match");
         require(!fs::exists(root / "report.csv"), "GUI report export is explicit");
-        if (capture) { gui.screenshot(fs::absolute("wmgui-detect.png")); }
         wm::app::Job job;
         job.embedding = false; job.automatic_report = false; job.mark = root / "stamped" / "mark.json";
         job.input = root / "stamped"; job.parameters.passphrase = "GUI secret";

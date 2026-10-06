@@ -46,12 +46,12 @@ public:
         TabCtrl_InsertItem(control(tabs), 0, &tab);
         tab.pszText = const_cast<wchar_t*>(L"Detect");
         TabCtrl_InsertItem(control(tabs), 1, &tab);
-        label(identity, L"Source image");
-        edit(identity); combo(identity_kind, {L"Source image", L"mark.json"}); button(identity_browse, L"Browse...");
+        label(identity, L"Watermark image");
+        edit(identity); combo(identity_kind, {L"Watermark image", L"mark.json"}); button(identity_browse, L"Browse...");
         label(input, L"Input image or folder");
         edit(input); button(input_browse, L"File..."); button(input_folder, L"Folder...");
         label(key, L"Detection key");
-        edit(key, ES_PASSWORD); combo(key_kind, {L"Passphrase", L"Key file (UTF-8)", L"Source identity"}, 2); button(key_browse, L"Browse...");
+        edit(key, ES_PASSWORD); combo(key_kind, {L"Passphrase", L"Key file (UTF-8)", L"Watermark identity"}, 2); button(key_browse, L"Browse...");
         label(output, L"Output folder");
         edit(output); button(output_browse, L"Browse...");
         label(strength, L"Strength"); combo(strength, {L"Low", L"Default", L"High"}, 1);
@@ -65,14 +65,12 @@ public:
         label(visible_size, L"Size %"); edit(visible_size, ES_NUMBER); SetWindowTextW(control(visible_size), L"15");
         label(visible_opacity, L"Opacity %"); edit(visible_opacity, ES_NUMBER); SetWindowTextW(control(visible_opacity), L"50");
         label(visible_ink, L"Color"); combo(visible_ink, {L"Black", L"White"});
-        label(visible_image, L"Silhouette image (transparent PNG)");
-        edit(visible_image); button(visible_browse, L"Browse...");
         button(run, L"Embed", BS_DEFPUSHBUTTON); button(cancel, L"Cancel"); button(export_csv, L"Export CSV...");
         make(progress, PROGRESS_CLASSW, L"", 0);
         make(status, L"STATIC", L"Ready", SS_LEFT, false);
         make(results, WC_LISTVIEWW, L"", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, true, WS_EX_CLIENTEDGE);
         ListView_SetExtendedListViewStyle(control(results), LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP);
-        const wchar_t* columns[] = {L"File", L"Verdict", L"Bit accuracy", L"Confidence", L"Source match", L"Scale", L"Crop phase"};
+        const wchar_t* columns[] = {L"File", L"Verdict", L"Bit accuracy", L"Confidence", L"Watermark match", L"Scale", L"Crop phase"};
         for (int i = 0; i < 7; ++i) {
             LVCOLUMNW column{};
             column.mask = LVCF_TEXT | LVCF_WIDTH;
@@ -110,7 +108,6 @@ public:
         else if (id == input_browse || id == input_folder) { field = input; folder = id == input_folder; }
         else if (id == output_browse) { field = output; folder = true; }
         else if (id == key_browse) { field = key; }
-        else if (id == visible_browse) { field = visible_image; }
         if (field) {
             const auto picker = folder ? Picker::folder : field == key ? Picker::key :
                                 field == identity && selection(identity_kind) == 1 ? Picker::manifest : Picker::image;
@@ -177,7 +174,7 @@ public:
             move(id, 20, y + 21, width - 40 - reserve, 26);
             if (id == identity) { move(identity_kind, width - 260, y + 21, 145, 180); move(identity_browse, width - 105, y + 21, 85, 26); }
             if (id == input) { move(input_browse, width - 186, y + 21, 78, 26); move(input_folder, width - 100, y + 21, 80, 26); }
-            if (id == key) { move(key_kind, width - 260, y + 21, 145, 180); move(key_browse, width - 105, y + 21, 85, 26); }
+            if (id == key) { move(key_kind, selection(key_kind) == 2 ? 20 : width - 260, y + 21, selection(key_kind) == 2 ? 160 : 145, 180); move(key_browse, width - 105, y + 21, 85, 26); }
             if (id == output) { move(output_browse, width - 105, y + 21, 85, 26); }
         }
         for (const auto pair : {std::pair{strength, 20}, std::pair{format, 180}, std::pair{quality, 320}}) {
@@ -192,18 +189,16 @@ public:
         move(visible_size, 505, 333, 60, 26);
         MoveWindow(labels_.at(visible_opacity), scaled(585), scaled(337), scaled(75), scaled(20), TRUE);
         move(visible_opacity, 665, 333, 60, 26);
-        MoveWindow(labels_.at(visible_image), scaled(20), scaled(370), scaled(480), scaled(20), TRUE);
-        MoveWindow(labels_.at(visible_ink), scaled(540), scaled(370), scaled(50), scaled(20), TRUE);
-        move(visible_ink, 595, 365, 130, 180);
-        move(visible_image, 20, 391, width - 145, 26); move(visible_browse, width - 105, 391, 85, 26);
-        const int run_y = embedding() ? 435 : 260;
+        MoveWindow(labels_.at(visible_ink), scaled(20), scaled(374), scaled(50), scaled(20), TRUE);
+        move(visible_ink, 75, 370, 130, 180);
+        const int run_y = embedding() ? 415 : 260;
         move(run, 20, run_y, 110, 30); move(cancel, 140, run_y, 90, 30); move(export_csv, width - 145, run_y, 125, 30);
         move(progress, 245, run_y + 5, width - 410, 20); move(status, 20, run_y + 40, width - 40, 24);
         const int results_y = run_y + 72, result_height = std::max(90, height - results_y - 160);
         move(results, 20, results_y, width - 40, result_height);
         const int log_y = embedding() ? results_y : results_y + result_height + 10;
         move(log, 20, log_y, width - 40, std::max(80, height - log_y - 20));
-        const int columns[] = {std::max(200, width - 605), 85, 95, 95, 110, 75, 100};
+        const int columns[] = {std::max(200, width - 625), 85, 95, 95, 130, 75, 100};
         for (int i = 0; i < 7; ++i) { ListView_SetColumnWidth(control(results), i, scaled(columns[i])); }
     }
 private:
@@ -256,24 +251,28 @@ private:
         EnableWindow(control(identity_kind), !running_ && !embed_page);
         EnableWindow(control(key_browse), !running_ && selection(key_kind) == 1);
         EnableWindow(control(key), !running_ && selection(key_kind) != 2);
-        SetWindowTextW(labels_.at(key), selection(key_kind) == 2 ? L"Detection key — derived from source / manifest; no passphrase needed" : L"Detection key");
+        SetWindowTextW(labels_.at(key), selection(key_kind) == 2 ? L"Detection key — watermark identity; no passphrase needed" : L"Detection key");
+        ShowWindow(control(key), selection(key_kind) == 2 ? SW_HIDE : SW_SHOW);
+        ShowWindow(control(key_browse), selection(key_kind) == 2 ? SW_HIDE : SW_SHOW);
         EnableWindow(control(quality), !running_ && selection(format) == 1);
         EnableWindow(control(export_csv), !running_ && !last_job_.embedding && !last_csv_.empty());
         const bool show_visible = SendMessageW(control(visible), BM_GETCHECK, 0, 0) == BST_CHECKED;
-        for (int id : {visible_image, visible_browse, visible_position, visible_size, visible_opacity, visible_ink}) {
+        for (int id : {visible_position, visible_size, visible_opacity, visible_ink}) {
             EnableWindow(control(id), !running_ && show_visible);
         }
         ShowWindow(control(export_csv), embed_page ? SW_HIDE : SW_SHOW);
         ShowWindow(control(results), embed_page ? SW_HIDE : SW_SHOW);
-        for (int id : {output, output_browse, strength, format, quality, force, visible, visible_image,
-                       visible_browse, visible_position, visible_size, visible_opacity, visible_ink}) {
+        for (int id : {output, output_browse, strength, format, quality, force, visible,
+                       visible_position, visible_size, visible_opacity, visible_ink}) {
             ShowWindow(control(id), embed_page ? SW_SHOW : SW_HIDE);
         }
-        for (int id : {output, strength, format, quality, visible_image, visible_position, visible_size, visible_opacity, visible_ink}) {
+        for (int id : {output, strength, format, quality, visible_position, visible_size, visible_opacity, visible_ink}) {
             ShowWindow(labels_.at(id), embed_page ? SW_SHOW : SW_HIDE);
         }
-        SetWindowTextW(labels_.at(identity), embed_page || selection(identity_kind) == 0 ? L"Source image" : L"Watermark manifest");
+        SetWindowTextW(labels_.at(identity), embed_page || selection(identity_kind) == 0 ? L"Watermark image" : L"Watermark manifest");
+        SetWindowTextW(labels_.at(input), embed_page ? L"Image or folder to watermark" : L"Image or folder to inspect");
         SetWindowTextW(control(run), embed_page ? L"Embed" : L"Detect");
+        layout();
     }
     void append(const std::wstring& message) {
         if (GetWindowTextLengthW(control(log)) > 900000) { SetWindowTextW(control(log), L"Earlier log entries omitted.\r\n"); }
@@ -319,8 +318,8 @@ private:
         job.recursive = SendMessageW(control(recursive), BM_GETCHECK, 0, 0) == BST_CHECKED;
         job.force = SendMessageW(control(force), BM_GETCHECK, 0, 0) == BST_CHECKED;
         if (job.embedding && SendMessageW(control(visible), BM_GETCHECK, 0, 0) == BST_CHECKED) {
-            job.visible_image = text(control(visible_image));
-            if (job.visible_image.empty()) { throw std::invalid_argument("Choose a transparent silhouette PNG for the visible watermark."); }
+            job.visible_image = job.source;
+            if (job.visible_image.empty()) { throw std::invalid_argument("Choose a transparent watermark PNG."); }
             job.visible.position = static_cast<Position>(selection(visible_position));
             const auto percent = [&](int id) {
                 const auto value = text(control(id));

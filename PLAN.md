@@ -72,6 +72,16 @@ Stamp a watermark derived from a source image into host photos so a second tool 
 
 The source image defines the mark. A full-resolution copy of that image will not survive JPEG, so version 1 embeds a short redundant payload. Detection reports present, weak, or absent, plus bit accuracy and a confidence score.
 
+### v0.2.1 watermark-only detection workflow — 2026-10-06
+
+"Source" in the algorithm means watermark artwork, never the original host photo.
+The GUI now calls it **Watermark image** and uses that one file for both visible
+shape and embedded identity. Detect takes the watermark artwork and the image/folder
+to inspect; neither the original photo, a manifest, nor a passphrase is needed in
+default mode. `mark.json` and private keys remain available for existing marks.
+The CLI uses `--watermark` and `--visible`; `--source` and `--visible-image` retain
+their previous behavior. No payload, hash, pattern, or manifest format changes.
+
 ## Programs
 
 Three build products, two user-facing tools:
