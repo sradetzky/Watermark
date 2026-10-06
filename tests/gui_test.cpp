@@ -45,6 +45,7 @@ public:
             }, reinterpret_cast<LPARAM>(this));
             return window != nullptr;
         }, 10000);
+        if (WaitForInputIdle(process_.hProcess, 10000) != 0) { throw std::runtime_error("GUI did not finish initializing."); }
         until([&] { return GetDlgItem(window, ids::run) != nullptr; }, 10000);
     }
     ~GuiProcess() {
@@ -118,6 +119,12 @@ public:
             for (int x = 0; x < 128; ++x) { source.at(x, y) = {static_cast<std::uint8_t>((x * y + x) % 256), 100, 140, 255}; }
         }
         wm::save_image(host, path / "host.png"); wm::save_image(source, path / "source.png");
+        wm::Image silhouette(64, 96);
+        for (auto& pixel : silhouette.pixels) { pixel = {0, 0, 0, 0}; }
+        for (int y = 8; y < 88; ++y) {
+            for (int x = 8; x < 56; ++x) { silhouette.at(x, y).a = 255; }
+        }
+        wm::save_image(silhouette, path / "silhouette.png");
     }
     ~Fixtures() { std::error_code error; fs::remove_all(path, error); }
     fs::path path;
@@ -131,10 +138,36 @@ int main(int argc, char** argv) {
         const auto& root = fixtures.path;
         wchar_t executable[32768]{}; GetModuleFileNameW(nullptr, executable, 32768);
         GuiProcess gui(fs::path(executable).parent_path() / "wmgui.exe", root);
+        require(!IsWindowEnabled(gui.control(ids::key)), "GUI defaults to source identity without a passphrase");
+        gui.selection(ids::key_kind, 0);
         require(SendMessageW(gui.control(ids::key), EM_GETPASSWORDCHAR, 0, 0) != 0, "Passphrase is masked");
         gui.set(ids::identity, (root / "source.png").wstring()); gui.set(ids::input, (root / "host.png").wstring());
         gui.set(ids::output, (root / "stamped").wstring()); gui.set(ids::key, L"GUI secret");
+        require(!IsWindowEnabled(gui.control(ids::visible_image)), "Visible controls disabled by default");
+        gui.click(ids::visible);
+        require(IsWindowEnabled(gui.control(ids::visible_image)), "Visibility checkbox enables silhouette settings");
+        require(gui.text(ids::visible_opacity) == L"50" && SendMessageW(gui.control(ids::visible_ink), CB_GETCURSEL, 0, 0) == 0,
+                "GUI defaults to black at 50 percent opacity");
+        gui.set(ids::visible_image, (root / "silhouette.png").wstring());
+        gui.selection(ids::visible_position, 1); gui.set(ids::visible_size, L"20"); gui.set(ids::visible_opacity, L"50");
+        gui.selection(ids::key_kind, 2);
+        gui.set(ids::output, (root / "source-key").wstring());
         if (capture) { gui.screenshot(fs::absolute("wmgui-embed.png")); }
+        gui.click(ids::run); gui.done();
+        require(gui.text(ids::status).rfind(L"Completed", 0) == 0 && fs::exists(root / "source-key" / "host.png.png"),
+                "GUI embeds visible mark without a passphrase");
+        require(wm::load_image(root / "source-key" / "host.png.png").at(40, 460).r <
+                wm::load_image(root / "host.png").at(40, 460).r - 10, "GUI applies translucent black silhouette");
+        gui.detect_page(); gui.selection(ids::identity_kind, 1);
+        gui.set(ids::identity, (root / "source-key" / "mark.json").wstring()); gui.set(ids::input, (root / "source-key").wstring());
+        gui.click(ids::run); gui.done();
+        require(gui.text(ids::log).find(L"match=true") != std::wstring::npos, "GUI detects source-key manifest without a passphrase");
+        SendMessageW(gui.control(ids::tabs), WM_KEYDOWN, VK_LEFT, 0);
+        until([&] { return gui.text(ids::run) == L"Embed"; }, 10000);
+        gui.set(ids::identity, (root / "source.png").wstring()); gui.set(ids::input, (root / "host.png").wstring());
+        gui.set(ids::output, (root / "stamped").wstring()); gui.selection(ids::key_kind, 0); gui.set(ids::key, L"GUI secret");
+        gui.selection(ids::visible_ink, 1);
+        gui.set(ids::visible_opacity, L"75");
         gui.click(ids::run);
         require(!IsWindowEnabled(gui.control(ids::run)) && IsWindowEnabled(gui.control(ids::cancel)), "Worker disables editing and enables cancel");
         gui.done();
@@ -142,6 +175,8 @@ int main(int argc, char** argv) {
         const auto payload = wm::payload_from_source(wm::load_image(root / "source.png"));
         require(wm::detect(wm::load_image(root / "stamped" / "host.png.png"), payload, {"GUI secret"}).hash_matches == true,
                 "GUI output contains expected mark");
+        require(wm::load_image(root / "stamped" / "host.png.png").at(40, 460).r >
+                wm::load_image(root / "host.png").at(40, 460).r + 40, "GUI places visible silhouette at selected bottom-left position");
         gui.detect_page(); gui.selection(ids::identity_kind, 1);
         gui.set(ids::identity, (root / "stamped" / "mark.json").wstring()); gui.set(ids::input, (root / "stamped").wstring());
         gui.click(ids::run); gui.done();

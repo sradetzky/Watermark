@@ -3,8 +3,9 @@
 
 namespace watermark::app {
 std::string display(const std::filesystem::path& path);
-std::string mark_json(const Payload& payload, Strength strength);
-Payload read_mark(const std::filesystem::path& path);
+struct Manifest { Payload payload; bool key_from_source = false; };
+std::string mark_json(const Payload& payload, Strength strength, bool key_from_source);
+Manifest read_mark(const std::filesystem::path& path);
 std::string hash_text(std::uint64_t hash);
 bool same_path(const std::filesystem::path& a, const std::filesystem::path& b);
 std::vector<std::filesystem::path> input_files(const std::filesystem::path& input, bool recursive,

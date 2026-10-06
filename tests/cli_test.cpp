@@ -95,6 +95,12 @@ int main() {
         if (!count || count == 32768) { throw std::runtime_error("Cannot resolve CLI executable location."); }
         const auto bin = fs::path(executable_name).parent_path();
         const auto embed = bin / "wmembed.exe", detect = bin / "wmdetect.exe";
+        wm::Image silhouette(64, 96);
+        for (auto& pixel : silhouette.pixels) { pixel = {0, 0, 0, 0}; }
+        for (int y = 8; y < 88; ++y) {
+            for (int x = 8; x < 56; ++x) { silhouette.at(x, y).a = 255; }
+        }
+        wm::save_image(silhouette, root / "silhouette.png");
         fs::create_directories(root / "photos" / "nested");
         wm::save_image(fixture(128, 91), root / "source.png");
         wm::save_image(fixture(512, 13), root / "photos" / "photo, one.png");
@@ -146,6 +152,57 @@ int main() {
         write(root / "invalid.json", "{\"format_version\":2}");
         require(run(detect, {L"--mark", L"invalid.json", L"--key-file", L"secret.txt", L"--in", L"photos"}, root) == 2,
                 "Unsupported manifest version rejected");
+        require(run(embed, {L"--source", L"source.png", L"--key-file", L"secret.txt", L"--in", L"photos/photo, one.png",
+                L"--out", L"visible", L"--visible-image", L"silhouette.png", L"--visible-position", L"bottom-right",
+                L"--visible-size", L"20", L"--visible-opacity", L"75", L"--visible-color", L"white"}, root) == 0, "CLI embeds visible silhouette");
+        const auto visible_image = wm::load_image(root / "visible" / "photo, one.png.png");
+        const auto original = wm::load_image(root / "photos" / "photo, one.png");
+        require(visible_image.at(470, 460).r > original.at(470, 460).r + 40, "CLI places white silhouette at bottom right");
+        require(run(detect, {L"--mark", L"visible/mark.json", L"--key-file", L"secret.txt", L"--in", L"visible",
+                L"--report", L"visible.csv"}, root) == 0 && read(root / "visible.csv").find(",true,") != std::string::npos,
+                "CLI detects visible mode with unchanged manifest");
+        require(run(embed, {L"--source", L"source.png", L"--key-file", L"secret.txt", L"--in", L"photos/photo, one.png",
+                L"--out", L"invalid-visible", L"--visible-image", L"silhouette.png", L"--visible-position", L"nowhere"}, root) == 2,
+                "CLI rejects invalid visible position");
+        require(run(embed, {L"--source", L"source.png", L"--key-file", L"secret.txt", L"--in", L"photos/photo, one.png",
+                L"--out", L"invalid-visible", L"--visible-size", L"20"}, root) == 2, "CLI rejects visible settings without cutout");
+        require(run(embed, {L"--source", L"source.png", L"--key-file", L"secret.txt", L"--in", L"photos/photo, one.png",
+                L"--out", L"invalid-visible", L"--visible-image", L"source.png"}, root) == 2 &&
+                !fs::exists(root / "invalid-visible" / "mark.json"), "CLI rejects opaque visible input before creating output");
+        require(run(embed, {L"--source", L"silhouette.png", L"--in", L"photos/photo, one.png", L"--out", L"source-visible",
+                L"--visible-image", L"silhouette.png"}, root) == 0 &&
+                read(root / "source-visible" / "mark.json").find("\"key_mode\": \"source-v1\"") != std::string::npos,
+                "CLI derives key from transparent source and records its mode");
+        const auto subtle_image = wm::load_image(root / "source-visible" / "photo, one.png.png");
+        require(std::abs(int(subtle_image.at(480, 470).r) - int(original.at(480, 470).r) / 2) <= 8,
+                "CLI defaults to translucent black at 50 percent with small keyed changes");
+        require(run(detect, {L"--mark", L"source-visible/mark.json", L"--in", L"source-visible", L"--report", L"source-visible.csv"}, root) == 0 &&
+                read(root / "source-visible.csv").find(",present,1.000000,") != std::string::npos,
+                "CLI detects source-key mark from manifest without a passphrase");
+        require(run(detect, {L"--source", L"silhouette.png", L"--in", L"source-visible/photo, one.png.png", L"--report", L"source-identity.csv"}, root) == 0 &&
+                read(root / "source-identity.csv").find(",true,") != std::string::npos,
+                "CLI detects source-key mark directly from transparent silhouette");
+        require(run(detect, {L"--source", L"source.png", L"--in", L"source-visible/photo, one.png.png", L"--report", L"other-source.csv"}, root) == 0 &&
+                read(root / "other-source.csv").find(",absent,") != std::string::npos,
+                "Another image cannot identify a source-key mark");
+        require(run(detect, {L"--mark", L"source-visible/mark.json", L"--passphrase", L"wrong", L"--in", L"source-visible"}, root) == 2,
+                "Source-key manifest rejects mixed private key mode");
+        require(run(detect, {L"--mark", L"stamped/mark.json", L"--in", L"photos"}, root) == 2,
+                "Legacy manifest still requires original secret");
+        const auto private_manifest = read(root / "stamped" / "mark.json");
+        require(run(embed, {L"--source", L"source.png", L"--in", L"photos/photo, one.png", L"--out", L"stamped"}, root) == 2 &&
+                read(root / "stamped" / "mark.json") == private_manifest, "Changing key mode cannot replace existing manifest without force");
+        auto unknown_mode = read(root / "source-visible" / "mark.json");
+        unknown_mode.replace(unknown_mode.find("source-v1"), 9, "source-v9");
+        write(root / "unknown-mode.json", unknown_mode);
+        require(run(detect, {L"--mark", L"unknown-mode.json", L"--in", L"photos"}, root) == 2, "Reject unknown key derivation mode");
+        fs::create_directory(root / "cutout-target");
+        const auto cutout_destination = root / "cutout-target" / "photo, one.png.png";
+        wm::save_image(silhouette, cutout_destination);
+        const auto cutout_before = read(cutout_destination);
+        require(run(embed, {L"--source", L"source.png", L"--in", L"photos/photo, one.png", L"--out", L"cutout-target",
+                L"--visible-image", L"cutout-target/photo, one.png.png", L"--force"}, root) == 1 &&
+                read(cutout_destination) == cutout_before, "Forced output cannot overwrite visible cutout source");
         write(root / "photos" / "broken.jpg", "not an image");
         require(run(detect, {L"--source", L"source.png", L"--key-file", L"secret.txt", L"--in", L"photos",
                             L"--report", L"errors.csv"}, root) == 1 &&

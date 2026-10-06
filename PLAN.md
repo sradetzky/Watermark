@@ -48,6 +48,24 @@ The sections below remain the intended product contract. The original sequence
 uses the self-test as the gate; the implemented synthetic gate allowed console
 work, while full real-photo validation remains open before declaring version 1 done.
 
+## v0.2.0 extension checkpoint — 2026-10-06
+
+- Optional visible silhouette in the GUI and CLI. Prepared transparent PNG alpha
+  supplies the shape; empty borders are trimmed and aspect ratio is retained.
+  Four corners and center; default bottom right, longest edge 15% of the host's
+  short side, 2% corner margin, translucent black at 50% opacity. White is also available.
+- Compose the visible stamp first, then embed the existing detectable payload.
+  Detection is independent of visible position/color and still validates CRC;
+  merely pasting a silhouette does not identify a mark.
+- Both frontends default to deriving the pattern key from the source's perceptual
+  identity, including transparency composited onto white. No passphrase is needed.
+  `mark.json` records `key_mode: source-v1`; legacy private-key mode remains supported.
+  This is public identification rather than private authentication. Wire format 1
+  and existing private-mode hashes/constants are unchanged. v0.1.0 readers reject
+  source-key manifests; v0.2.0 readers accept both manifest modes.
+- Local examples and the prepared photographer cutout remain in ignored `images/`
+  and `test-output/`. Broader photo-corpus validation remains open.
+
 ## Goal
 
 Stamp a watermark derived from a source image into host photos so a second tool can still recognize it after compression and ordinary manipulation, with measured accuracy.

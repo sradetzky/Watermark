@@ -16,6 +16,9 @@ struct Job {
     bool recursive = false;
     bool force = false;
     bool automatic_report = true; // GUI exports the completed result explicitly.
+    std::filesystem::path visible_image; // Empty keeps invisible-only behavior.
+    VisibleWatermark visible;
+    bool key_from_source = false; // Public image identity instead of a user secret.
 };
 struct Event {
     std::filesystem::path file;

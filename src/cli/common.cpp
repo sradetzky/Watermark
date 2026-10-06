@@ -27,7 +27,8 @@ struct Options {
 };
 Options parse(int argc, wchar_t** argv, bool embedding) {
     const std::set<std::wstring> common = {L"--source", L"--key-file", L"--passphrase", L"--in"};
-    const std::set<std::wstring> embed_values = {L"--out", L"--format", L"--quality", L"--strength"};
+    const std::set<std::wstring> embed_values = {L"--out", L"--format", L"--quality", L"--strength",
+        L"--visible-image", L"--visible-position", L"--visible-size", L"--visible-opacity", L"--visible-color"};
     const std::set<std::wstring> detect_values = {L"--mark", L"--report"};
     Options options;
     std::set<std::wstring> seen;
@@ -47,14 +48,13 @@ Options parse(int argc, wchar_t** argv, bool embedding) {
     return options;
 }
 Parameters parameters(const Options& options) {
-    if (options.contains(L"--key-file") == options.contains(L"--passphrase")) {
-        throw std::invalid_argument("Supply exactly one of --key-file and --passphrase.");
+    if (options.contains(L"--key-file") && options.contains(L"--passphrase")) {
+        throw std::invalid_argument("Supply only one of --key-file and --passphrase.");
     }
     Parameters result;
     if (options.contains(L"--key-file")) {
         result.passphrase = app::read_key_file(options.required(L"--key-file"));
-    } else { result.passphrase = utf8(options.get(L"--passphrase")); }
-    if (result.passphrase.empty()) { throw std::invalid_argument("Passphrase must not be empty."); }
+    } else if (options.contains(L"--passphrase")) { result.passphrase = utf8(options.get(L"--passphrase")); }
     const auto strength = options.get(L"--strength", L"default");
     if (strength == L"low") { result.strength = Strength::low; }
     else if (strength == L"high") { result.strength = Strength::high; }
@@ -63,17 +63,24 @@ Parameters parameters(const Options& options) {
 }
 void help(bool embedding) {
     if (embedding) {
-        std::cout << "wmembed --source logo.png --key-file secret.txt --in photos --out stamped\n"
+        std::cout << "wmembed --source logo.png --in photos --out stamped\n"
                      "  --format png|jpeg       Output format (default png)\n"
                      "  --quality 1..100        JPEG quality (default 90)\n"
                      "  --strength low|default|high\n"
+                     "  --visible-image PNG     Transparent silhouette with a detectable payload\n"
+                     "  --visible-position bottom-right|bottom-left|top-right|top-left|center\n"
+                     "  --visible-size 1..50     Percent of short side (longest stamp edge; default 15)\n"
+                     "  --visible-opacity 1..100 Percent opacity (default 50)\n"
+                     "  --visible-color black|white (default black)\n"
                      "  --force                 Rewrite an existing mark; replace existing output\n";
     } else {
-        std::cout << "wmdetect (--source logo.png | --mark stamped/mark.json) --key-file secret.txt --in images\n"
+        std::cout << "wmdetect (--source logo.png | --mark stamped/mark.json) --in images\n"
                      "  --report report.csv     CSV destination (default report.csv for a directory)\n";
     }
     std::cout << "  --recursive             Include subdirectories (default one level)\n"
-                 "  --passphrase TEXT       Alternative to a UTF-8 --key-file\n"
+                 "  Default: public key derived from source identity; manifest records the mode\n"
+                 "  --key-file FILE         Use a private UTF-8 key (required for legacy marks)\n"
+                 "  --passphrase TEXT       Alternative to --key-file\n"
                  "  --help                  Show usage\n"
                  "Exit 0: completed (absent is a valid result). Exit 1: file/operation failure. Exit 2: invalid arguments.\n";
 }
@@ -86,6 +93,7 @@ int run(int argc, wchar_t** argv, bool embedding) {
         app::Job job;
         job.embedding = embedding;
         job.parameters = parameters(options);
+        job.key_from_source = !options.contains(L"--key-file") && !options.contains(L"--passphrase");
         job.input = options.required(L"--in");
         job.key_file = options.get(L"--key-file");
         job.source = options.get(L"--source");
@@ -102,6 +110,29 @@ int run(int argc, wchar_t** argv, bool embedding) {
                 throw std::invalid_argument("JPEG quality must be 1..100.");
             }
             job.jpeg_quality = std::stoi(quality);
+            job.visible_image = options.get(L"--visible-image");
+            if (job.visible_image.empty() && (options.contains(L"--visible-position") ||
+                options.contains(L"--visible-size") || options.contains(L"--visible-opacity") || options.contains(L"--visible-color"))) {
+                throw std::invalid_argument("Visible settings require --visible-image.");
+            }
+            const std::map<std::wstring, Position> positions = {
+                {L"bottom-right", Position::bottom_right}, {L"bottom-left", Position::bottom_left},
+                {L"top-right", Position::top_right}, {L"top-left", Position::top_left}, {L"center", Position::center}};
+            const auto position = positions.find(options.get(L"--visible-position", L"bottom-right"));
+            if (position == positions.end()) { throw std::invalid_argument("Invalid visible watermark position."); }
+            job.visible.position = position->second;
+            const auto color = options.get(L"--visible-color", L"black");
+            if (color != L"black" && color != L"white") { throw std::invalid_argument("Visible color must be black or white."); }
+            job.visible.ink = color == L"black" ? VisibleInk::black : VisibleInk::white;
+            const auto percent = [&](const std::wstring& name, const std::wstring& fallback) {
+                const auto value = options.get(name, fallback);
+                if (value.empty() || value.size() > 3 || value.find_first_not_of(L"0123456789") != std::wstring::npos) {
+                    throw std::invalid_argument("Invalid percentage: " + utf8(name));
+                }
+                return std::stoi(value);
+            };
+            job.visible.size_percent = percent(L"--visible-size", L"15");
+            job.visible.opacity_percent = percent(L"--visible-opacity", L"50");
         } else {
             if (options.contains(L"--source") == options.contains(L"--mark")) {
                 throw std::invalid_argument("Supply exactly one of --source and --mark.");

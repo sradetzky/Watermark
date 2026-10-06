@@ -2,7 +2,7 @@
 
 [![Windows build and test](https://github.com/sradetzky/Watermark/actions/workflows/windows.yml/badge.svg)](https://github.com/sradetzky/Watermark/actions/workflows/windows.yml)
 
-Experimental Windows tools that stamp a mark into images and later test whether that mark is still there. The mark is derived from a source image and a passphrase. The project targets recovery after compression and ordinary photo edits; real-photo validation is still pending.
+Experimental Windows tools that stamp a mark into images and later test whether that mark is still there. The mark is derived from a source image, with an optional private passphrase. The project targets recovery after compression and ordinary photo edits; broader real-photo validation is still pending.
 
 The core library, both command-line tools, and the Win32 window are implemented. Behavior and the robustness target are written down in [PLAN.md](PLAN.md); working context for future sessions is in [AGENTS.md](AGENTS.md).
 
@@ -16,7 +16,7 @@ The core library, both command-line tools, and the Win32 window are implemented.
 
 All three programs use the same core library and batch operations. They support single-file and folder runs.
 
-The source image is the identity of the mark. The tools embed a short redundant payload built from a robust hash of that image. They do not hide a full-resolution copy of the source inside the host photo.
+The source image is the identity of the mark. The tools embed a short redundant payload built from a robust hash of that image. An optional visible silhouette can also appear on the photo; it is accompanied by the detectable payload.
 
 ## Robustness target
 
@@ -90,24 +90,68 @@ Start the graphical interface with:
 
 The **Embed** page takes a source image, input image/folder, output folder, secret,
 strength, and PNG/JPEG settings. The **Detect** page accepts a source image or
-`mark.json` and shows a result row for each file. Select either a masked passphrase
-or a UTF-8 key file. Native file/folder pickers fill the paths; subfolders are optional.
+`mark.json` and shows a result row for each file. **Source identity** is the default
+detection key mode: no passphrase is needed. You can also select a masked passphrase
+or a UTF-8 key file for private-key mode and existing v0.1.0 marks.
+Native file/folder pickers fill the paths; subfolders are optional.
 Processing runs in the background, with a log, file progress, and **Cancel**.
 Cancellation keeps files already committed. Closing during a run requests cancellation
 before releasing the worker. After detection, **Export CSV** saves the completed
 results, including partial results from a cancelled batch. The GUI does not write
 a report automatically.
 
-Command-line usage:
+### Visible silhouette
 
-Put the passphrase in a single UTF-8 line in `secret.txt`, then run:
+On the Embed page, check **Visible watermark** and choose a transparent silhouette
+PNG. The alpha channel defines the shape; the tool renders it black or white, preserving
+transparent openings and trimming empty borders. Prepare the cutout before using
+it: the application does not segment a person from a landscape JPEG automatically.
+Opaque photographs and entirely empty cutouts are rejected.
+
+Choose **Bottom right** (default), **Bottom left**, **Top right**, **Top left**, or
+**Center**. **Size %** controls the longest edge relative to the photo's short side
+(1..50, default 15); **Opacity %** is 1..100 (default 50). **Color** defaults to
+black for a subtle thumbprint; white is available for dark photos. Corner marks have a 2%
+margin. The original aspect ratio is retained. Uncheck visibility for the original
+invisible-only workflow.
+
+The visible stamp is applied before embedding the detectable payload. Detection
+uses the same source image or `mark.json`; it needs no position setting or visible
+stamp image. It can recover a payload even if a crop removes the visible corner,
+provided enough marked image remains. A silhouette pasted by another application
+without the payload does not establish a detected mark. PSNR logged in visible
+mode measures only the keyed change against the already stamped image.
+
+### Command line and detection keys
+
+Default usage needs no secret:
+
+```powershell
+.\build\Release\wmembed.exe --source silhouette.png --visible-image silhouette.png --visible-position bottom-right --in photo.jpg --out stamped
+.\build\Release\wmdetect.exe --mark stamped/mark.json --in stamped --report report.csv
+```
+
+Omit `--visible-image` for invisible-only output. Optional `--visible-size` and
+`--visible-opacity` use the same percentages as the GUI. `--visible-color black|white`
+selects the ink. You may use different
+images for the payload identity (`--source`) and the visible shape (`--visible-image`).
+
+Source-key mode composites source transparency onto white before computing its
+64-bit perceptual identity, then uses `Watermark/source-key/v1/` followed by the
+16 lowercase hexadecimal hash digits as the input to the existing keyed pattern.
+The manifest records `key_mode: source-v1` and lets detection derive the same key.
+This is public identification, not private authentication: the source or manifest
+is sufficient to reproduce a mark, and the perceptual identity can collide.
+Keep the same source file or the manifest for later detection.
+
+For private-key mode, put the passphrase in a single UTF-8 line in `secret.txt`, then run:
 
 ```powershell
 .\build\Release\wmembed.exe --source logo.png --key-file secret.txt --in photos --out stamped
 .\build\Release\wmdetect.exe --mark stamped/mark.json --key-file secret.txt --in stamped --report report.csv
 ```
 
-Detection also accepts `--source logo.png` instead of `--mark`. `mark.json` keeps the original source hash and format parameters; it contains no passphrase. Keep it when you want to detect a mark after changing or losing the source file.
+Detection also accepts `--source logo.png` instead of `--mark`. `mark.json` keeps the original source hash and format parameters; it contains no passphrase. Existing v0.1.0 manifests require their original secret. Private-key mode retains the v0.1.0 hash and payload behavior. Source-key mode requires v0.2.0; its optional manifest field is rejected by v0.1.0 readers, while the embedded payload format remains version 1. An output folder cannot change source identity or key mode without `--force`.
 
 Use `--recursive` for subdirectories. Embed defaults to PNG; add `--format jpeg --quality 70` for JPEG, or `--strength low|default|high` to change strength. Output names append an extension to the complete input name, so `photo.jpg` becomes `photo.jpg.png`. Input images are preserved. Existing outputs require `--force`; an input already carrying the same mark is skipped unless forced.
 
@@ -135,7 +179,15 @@ inspection, run `.\build\Release\watermark_gui_test.exe --capture`;
 it renders both pages and saves `wmgui-embed.png` and
 `wmgui-detect.png` in the working directory.
 
-Real-photo validation is pending the supplied image corpus. Scale search covers
+The supplied 1066x1600 concert photo has also been checked locally with a visible
+bottom-right black photographer silhouette and a source-derived key. PNG and JPEG 70
+recover all bits with a present verdict; JPEG 50 recovers all bits with a weak
+verdict at default strength and present at high strength. The original photo and
+a wrong source remain absent. Default keyed PSNR is about 45.56 dB against the
+visibly stamped photo. This single photo does not establish population robustness;
+the representative photo corpus and false-positive calibration remain open.
+
+Scale search covers
 5% increments from 75% to 150%, with neighboring dimensions checked around strong
 magic correlations to undo rounding. Crop synchronization searches all pixel/block
 phases at the observed scale, ranking the fixed magic before full-image CRC
@@ -151,7 +203,7 @@ WIC uses the first frame of an image. PNG preserves alpha; JPEG composites on wh
 ## Contributing and license
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for verification and image-sharing guidance.
-Keep local photo corpora in `photos/` or `test-output/`; these folders, build output,
+Keep local photo corpora in `images/`, `photos/`, or `test-output/`; these folders, build output,
 `secret.txt`, `key.txt`, and generated reports are ignored by Git. Other key files
 must also stay out of commits.
 

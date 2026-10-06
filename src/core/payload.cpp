@@ -16,10 +16,14 @@ std::array<bool, payload_bit_count> Payload::bits() const {
     return result;
 }
 
-Payload payload_from_source(const Image& source) {
+Payload payload_from_source(const Image& source, bool composite_alpha) {
     const auto normalized = resize_image(source, 32, 32);
     std::array<double, 32 * 32> gray{};
-    for (std::size_t i = 0; i < gray.size(); ++i) { gray[i] = detail::luminance(normalized.pixels[i]); }
+    for (std::size_t i = 0; i < gray.size(); ++i) {
+        const auto& pixel = normalized.pixels[i];
+        const double alpha = composite_alpha ? pixel.a / 255.0 : 1.0;
+        gray[i] = detail::luminance(pixel) * alpha + 255 * (1 - alpha);
+    }
     constexpr double pi = 3.14159265358979323846;
     Payload payload;
     for (int v = 1; v <= 8; ++v) {

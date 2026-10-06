@@ -37,12 +37,26 @@ void save_image(const Image& image, const std::filesystem::path& path,
 Image resize_image(const Image& image, int width, int height);
 double psnr(const Image& original, const Image& modified);
 
+enum class Position { bottom_right, bottom_left, top_right, top_left, center };
+enum class VisibleInk { black, white };
+struct VisibleWatermark {
+    Position position = Position::bottom_right;
+    int size_percent = 15; // Longest edge, relative to the host's short side.
+    int opacity_percent = 50;
+    VisibleInk ink = VisibleInk::black;
+};
+// The transparent image's alpha defines the silhouette; RGB is ignored.
+Image apply_visible_watermark(const Image& host, const Image& silhouette,
+                              const VisibleWatermark& options,
+                              const std::function<bool()>& cancelled = {});
+
 constexpr std::size_t payload_bit_count = 96;
 struct Payload {
     std::uint64_t source_hash = 0;
     std::array<bool, payload_bit_count> bits() const;
 };
-Payload payload_from_source(const Image& source);
+// Source-key mode composites alpha onto white; false preserves legacy hashing.
+Payload payload_from_source(const Image& source, bool composite_alpha = false);
 
 enum class Strength { low, normal, high };
 struct Parameters {

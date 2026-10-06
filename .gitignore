@@ -10,6 +10,7 @@
 /secret.txt
 /key.txt
 /photos/
+/images/
 /stamped/
 /report.csv
 CMakeUserPresets.json

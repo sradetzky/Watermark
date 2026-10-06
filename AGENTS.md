@@ -14,17 +14,22 @@ Implemented:
 - `wmembed` and `wmdetect`: file/folder operations, recursion, key files,
   `mark.json`, skip-if-present, PNG/JPEG output, CSV reporting.
 - `wmgui`: native Embed/Detect tabs, shell file/folder dialogs, masked passphrases
-  or key files, background jobs, progress, cancellation, results, and CSV export.
+  or key files, source-derived keys, background jobs, progress, cancellation,
+  results, and CSV export. Optional visible silhouette with five positions,
+  size and opacity controls; detection verifies the accompanying payload.
 - CTest core robustness, real-process CLI, and native-window GUI tests.
 
-Real-photo validation is pending images from the user. Continuous scale search,
+One supplied concert photo passes source-key visible mode in PNG/JPEG 70; JPEG 50
+is CRC-valid but weak at default strength, present at high strength. Broader
+real-photo validation is pending. Continuous scale search,
 combined resize/crop synchronization, and WebP codec validation remain open.
 Passing synthetic tests does not establish the full real-world robustness target
 in `PLAN.md`.
 
 The public repository is `https://github.com/sradetzky/Watermark`, licensed under
 MIT. Check the current Git status and remotes before committing or publishing.
-Keep local photos in ignored `photos/` or `test-output/`; never commit passphrases,
+Use `develop` for development; `main` and release tags hold published code.
+Keep local photos in ignored `images/`, `photos/` or `test-output/`; never commit passphrases,
 private images, generated reports, or build output. Only add image fixtures with
 permission and a documented license.
 
@@ -75,6 +80,8 @@ ask the user to install it. Do not install tools automatically.
 - `src/core/crypto_win.cpp`, `pattern.cpp`: BCrypt SHA-256 counter stream and chip mapping.
 - `src/core/internal.h`, `dct.cpp`: shared coefficient positions and orthonormal 8x8 transforms.
 - `src/core/embed.cpp`, `detect.cpp`: embedding and recovery using the same pattern.
+- `src/core/visible.cpp`: alpha-mask bounds, proportional placement, white
+  or black silhouette composition. Apply this before keyed embedding, never after it.
 - `src/app/jobs.h`, `jobs.cpp`: shared typed jobs, progress events, summary/CSV,
   per-file errors, cancellation, and output protections.
 - `src/app/files.cpp`, `files.h`: key files, UTF-8 conversion, manifests, traversal,
@@ -100,6 +107,25 @@ Version 1 carries 96 bits, MSB first: 64-bit source hash, 16-bit magic `0x574D`,
 then CRC-16/CCITT-FALSE over the first 80 bits. The hash uses signs of DCT
 coefficients `(u,v)` in `1..8` on a grayscale 32x32 source. It is a perceptual
 identity with possible collisions, not a cryptographic digest of the source file.
+
+v0.2.0 defaults in both frontends to a public source-derived key. Compute the hash
+with source alpha composited onto white (`payload_from_source(source, true)`),
+then use `Watermark/source-key/v1/` + 16 lowercase hex hash digits as the pattern
+key. This avoids identical hashes for black transparent silhouettes of different
+shapes. Private passphrase mode retains legacy hashing (`false`, the API default).
+Source-key manifests have the optional `key_mode: source-v1`; missing means legacy
+private mode. Reject unknown key modes and incompatible output manifest changes
+unless force is explicit. Old v0.1.0 readers reject the additional manifest field;
+the 96-bit wire format and coefficient constants are unchanged. Never treat this
+public key as authentication, and never repair CRC bits using the expected hash.
+
+Visible mode accepts a prepared transparent cutout. Alpha defines a black/white shape;
+RGB is ignored. Trim transparent bounds, retain aspect ratio, default longest edge
+15% of the host short side, black ink at 50% opacity, corner margin 2%. Four corners and center
+are supported. The application does not automatically segment complex photos.
+The supplied cutout was prepared with imagegen and remains local in `images/`.
+Use the source image or manifest to detect; pasted silhouettes alone are not proof.
+The >=40 dB gate in visible mode measures keyed embedding against the visible host.
 
 The pattern repeats every 128x128 pixels (16x16 DCT blocks), spreads each bit over
 eight mid-frequency coefficients, and derives permutation/signs from exact UTF-8
@@ -129,7 +155,9 @@ WIC decoder; WebP output is not implemented.
 
 ## CLI behavior to preserve
 
-- Prefer `--key-file`: one UTF-8 line, optional BOM and one terminal CRLF/LF;
+- With no key flag, use source identity; source-key manifests derive their key.
+  Existing private-mode manifests still require the original passphrase/key file.
+  In private mode prefer `--key-file`: one UTF-8 line, optional BOM and one terminal CRLF/LF;
   other whitespace is significant. Never log or store the passphrase.
 - `mark.json` stores hash and versioned parameters, never the key. Its flat schema
   is validated strictly; detection accepts it with `--mark` instead of `--source`.

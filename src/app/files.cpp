@@ -70,14 +70,16 @@ std::string hash_text(std::uint64_t hash) {
     output << std::hex << std::setfill('0') << std::setw(16) << hash;
     return output.str();
 }
-std::string mark_json(const Payload& payload, Strength strength) {
+std::string mark_json(const Payload& payload, Strength strength, bool key_from_source) {
     std::ostringstream output;
     output << "{\n  \"format_version\": 1,\n  \"source_hash\": \"" << hash_text(payload.source_hash)
            << "\",\n  \"tile_size\": 128,\n  \"coefficient_set\": \"mid8-v1\",\n  \"step\": 6.0,\n  \"strength\": \""
-           << strength_name(strength) << "\"\n}\n";
+           << strength_name(strength) << '"';
+    if (key_from_source) { output << ",\n  \"key_mode\": \"source-v1\""; }
+    output << "\n}\n";
     return output.str();
 }
-Payload read_mark(const fs::path& path) {
+Manifest read_mark(const fs::path& path) {
     const auto text = read_text(path, 16 * 1024);
     // A deliberately narrow, flat versioned schema. No user text is stored in this file.
     const std::regex field(R"json(\s*"([a-z_]+)"\s*:\s*("[a-zA-Z0-9.-]+"|[0-9]+(?:\.[0-9]+)?)\s*)json");
@@ -95,7 +97,9 @@ Payload read_mark(const fs::path& path) {
         if (text[position] == '}') { ++position; break; }
         if (text[position++] != ',') { fail(); }
     }
-    if (text.find_first_not_of(" \t\r\n", position) != std::string::npos || fields.size() != 6 ||
+    const bool source_key = fields.count("key_mode") != 0;
+    if (text.find_first_not_of(" \t\r\n", position) != std::string::npos || fields.size() != (source_key ? 7 : 6) ||
+        (source_key && fields["key_mode"] != "\"source-v1\"") ||
         fields["format_version"] != "1" || fields["tile_size"] != "128" ||
         fields["coefficient_set"] != "\"mid8-v1\"" || fields["step"] != "6.0" ||
         (fields["strength"] != "\"default\"" && fields["strength"] != "\"low\"" && fields["strength"] != "\"high\"")) {
@@ -103,7 +107,7 @@ Payload read_mark(const fs::path& path) {
     }
     const auto hash = fields["source_hash"];
     if (!std::regex_match(hash, std::regex("\"[0-9a-fA-F]{16}\""))) { fail(); }
-    return Payload{std::stoull(hash.substr(1, 16), nullptr, 16)};
+    return {{std::stoull(hash.substr(1, 16), nullptr, 16)}, source_key};
 }
 
 bool supported(const fs::path& path) {

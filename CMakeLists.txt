@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Watermark VERSION 0.1.0 LANGUAGES CXX)
+project(Watermark VERSION 0.2.0 LANGUAGES CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "Watermark requires Windows (WIC and BCrypt).")
@@ -17,6 +17,7 @@ add_library(watermark_core STATIC
     src/core/payload.cpp
     src/core/pattern.cpp
     src/core/embed.cpp
+    src/core/visible.cpp
     src/core/detect.cpp
 )
 target_include_directories(watermark_core PUBLIC src)

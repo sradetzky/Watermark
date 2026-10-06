@@ -183,6 +183,82 @@ void primitives(const TestFiles& files) {
     require_throw([&] { wm::save_image(rgba, files.root / "missing" / "out.png"); }, "Report unwritable output");
     require_throw([&] { wm::save_image(rgba, files.root / "bad.jpg", wm::ImageFormat::jpeg, 101); }, "Reject invalid JPEG quality");
 }
+void visible_watermark(const TestFiles& files) {
+    wm::Image silhouette(80, 100), host(200, 160);
+    for (auto& pixel : silhouette.pixels) { pixel = {20, 30, 40, 0}; }
+    for (int y = 20; y < 80; ++y) {
+        for (int x = 10; x < 70; ++x) {
+            if (x < 30 || x >= 50 || y < 40 || y >= 60) { silhouette.at(x, y).a = 255; }
+        }
+    }
+    for (auto& pixel : host.pixels) { pixel = {40, 60, 80, 255}; }
+    const auto same = [](const wm::Pixel& a, const wm::Pixel& b) {
+        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+    };
+    const std::array<wm::Position, 5> positions = {wm::Position::bottom_right, wm::Position::bottom_left,
+        wm::Position::top_right, wm::Position::top_left, wm::Position::center};
+    const std::array<std::pair<int, int>, 5> origins = {std::pair{157, 117}, {3, 117}, {157, 3}, {3, 3}, {80, 60}};
+    for (std::size_t i = 0; i < positions.size(); ++i) {
+        const auto marked = wm::apply_visible_watermark(host, silhouette, {positions[i], 25, 50, wm::VisibleInk::white});
+        const auto [x0, y0] = origins[i];
+        require(same(marked.at(x0 + 3, y0 + 3), {148, 158, 168, 255}), "Visible position " + std::to_string(i) + " and opacity");
+        require(same(marked.at(x0 + 20, y0 + 20), host.at(x0 + 20, y0 + 20)), "Silhouette opening stays transparent");
+        bool outside_same = true;
+        for (int y = 0; y < host.height; ++y) {
+            for (int x = 0; x < host.width; ++x) {
+                if (x < x0 || x >= x0 + 40 || y < y0 || y >= y0 + 40) {
+                    outside_same = outside_same && same(marked.at(x, y), host.at(x, y));
+                }
+            }
+        }
+        require(outside_same, "Visible mark changes only its placement bounds");
+    }
+    auto transparent_host = host;
+    for (auto& pixel : transparent_host.pixels) { pixel.a = 0; }
+    const auto rgba = wm::apply_visible_watermark(transparent_host, silhouette, {wm::Position::top_left, 25, 50, wm::VisibleInk::white});
+    require(same(rgba.at(6, 6), {255, 255, 255, 128}) && rgba.at(23, 23).a == 0, "Visible source-over alpha composition");
+    const auto black = wm::apply_visible_watermark(host, silhouette, {wm::Position::top_left, 25, 25});
+    require(same(black.at(6, 6), {30, 45, 60, 255}), "Black silhouette blends subtly at 25 percent opacity");
+    const auto black50 = wm::apply_visible_watermark(host, silhouette, {wm::Position::top_left, 25, 50});
+    require(same(black50.at(6, 6), {20, 30, 40, 255}), "Black silhouette remains translucent at 50 percent opacity");
+    auto empty = silhouette;
+    for (auto& pixel : empty.pixels) { pixel.a = 0; }
+    require_throw([&] { wm::apply_visible_watermark(host, empty, {}); }, "Reject empty silhouette");
+    require_throw([&] { wm::apply_visible_watermark(host, host, {}); }, "Reject opaque photo as visible cutout");
+    require_throw([&] { wm::apply_visible_watermark(host, silhouette, {wm::Position::center, 51, 60}); }, "Reject excessive visible size");
+    require_throw([&] { wm::apply_visible_watermark(host, silhouette, {wm::Position::center, 15, 0}); }, "Reject zero visible opacity");
+    int checks = 0;
+    require_throw([&] { wm::apply_visible_watermark(host, silhouette, {}, [&] { return ++checks == 2; }); }, "Visible preparation cancellation");
+    const auto scene_host = scene(512, 13);
+    const auto alpha_identity = wm::payload_from_source(silhouette, true);
+    require(alpha_identity.source_hash != wm::payload_from_source(silhouette).source_hash,
+            "Source identity includes silhouette transparency without changing legacy hashing");
+    auto another_silhouette = silhouette;
+    for (int y = 20; y < 55; ++y) {
+        for (int x = 10; x < 45; ++x) { another_silhouette.at(x, y).a = 0; }
+    }
+    require(alpha_identity.source_hash != wm::payload_from_source(another_silhouette, true).source_hash,
+            "Distinct transparent silhouettes produce distinct source identities");
+    const auto prepared = wm::apply_visible_watermark(scene_host, silhouette, {});
+    const auto payload = wm::payload_from_source(scene(128, 91));
+    const wm::Parameters parameters{"visible selftest"};
+    const auto marked = wm::embed(prepared, payload, parameters);
+    require(wm::psnr(prepared, marked) >= 40, "Visible mode preserves keyed embedding quality");
+    check_detection(marked, payload, parameters, "Visible plus keyed PNG recovery");
+    for (const auto position : {wm::Position::bottom_left, wm::Position::top_right, wm::Position::top_left, wm::Position::center}) {
+        wm::VisibleWatermark placement;
+        placement.position = position;
+        check_detection(wm::embed(wm::apply_visible_watermark(scene_host, silhouette, placement), payload, parameters),
+                        payload, parameters, "Visible plus keyed recovery at position " + std::to_string(static_cast<int>(position)));
+    }
+    for (int quality : {70, 50}) {
+        const auto path = files.root / ("visible-" + std::to_string(quality) + ".jpg");
+        wm::save_image(marked, path, wm::ImageFormat::jpeg, quality);
+        check_detection(wm::load_image(path), payload, parameters, "Visible plus keyed JPEG " + std::to_string(quality));
+    }
+    require(wm::detect(prepared, payload, parameters).verdict == wm::Verdict::absent, "Visible silhouette alone is not keyed proof");
+    require(wm::detect(marked, payload, {"wrong visible key"}).verdict == wm::Verdict::absent, "Visible mode wrong key absent");
+}
 void robustness(const TestFiles& files) {
     const auto source = scene(128, 91);
     const auto payload = wm::payload_from_source(source);
@@ -275,6 +351,7 @@ int main() {
     try {
         TestFiles files;
         primitives(files);
+        visible_watermark(files);
         robustness(files);
     } catch (const std::exception& error) {
         std::cerr << "Self-test error: " << error.what() << '\n';
