@@ -76,7 +76,7 @@ void help(bool embedding) {
                      "  --visible-size 1..50     Percent of short side (longest stamp edge; default 15)\n"
                      "  --visible-opacity 1..100 Percent opacity (default 50)\n"
                      "  --visible-color black|white (default black)\n"
-                     "  --visible-padding PX     Nonnegative edge distance, capped to fit (default 2% of short side; center ignores padding)\n"
+                     "  --visible-padding PX     Nonnegative inset on all sides, capped to fit (default 2% of short side)\n"
                      "  --force                 Rewrite an existing mark; replace existing output\n";
     } else {
         std::cout << "wmdetect --watermark logo.png --in images\n"

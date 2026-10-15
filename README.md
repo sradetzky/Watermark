@@ -119,10 +119,13 @@ Choose **Bottom right** (default), **Bottom left**, **Top right**, **Top left**,
 horizontal midpoint with the photo's midpoint. **Size %** controls the longest edge relative to the photo's short side
 (1..50, default 15); **Opacity %** is 1..100 (default 50). **Color** defaults to
 black for a subtle thumbprint; white is available for dark photos. **Padding px** sets
-the distance from the trimmed artwork to the selected photo edge(s) in image pixels;
-0 places it directly at the edge. Leave the field empty for the default 2% of the
-photo's short side. Excessive padding is capped per axis so the entire stamp fits.
-**Center** ignores padding. The original aspect ratio is retained. Uncheck visibility for the original
+an equal inset from all four photo edges in image pixels. The trimmed artwork is
+positioned inside that area: **Top center** and **Bottom center** keep its horizontal
+midpoint centered, with the chosen distance to the top or bottom edge. **Center**
+centers it within the padded area; equal padding on opposite sides keeps that
+area's midpoint unchanged. Use 0 for no inset, or leave the field empty for the
+default 2% of the photo's short side. Excessive padding is capped per axis so the
+entire stamp fits within the padded area. The original aspect ratio is retained. Uncheck visibility for the original
 invisible-only workflow.
 
 The visible stamp is applied before embedding the detectable payload. Detection

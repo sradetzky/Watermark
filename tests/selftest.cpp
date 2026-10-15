@@ -236,7 +236,7 @@ void visible_watermark(const TestFiles& files) {
                      "Pixel padding and rectangular artwork at position " + std::to_string(i));
     }
     check_bounds({wm::Position::bottom_center, 25, 100, wm::VisibleInk::white, 0}, 80, 134, "Zero padding reaches the bottom edge");
-    check_bounds({wm::Position::top_left, 25, 100, wm::VisibleInk::white, 2147483647}, 161, 134, "Excessive padding keeps the whole stamp inside the host");
+    check_bounds({wm::Position::top_left, 25, 100, wm::VisibleInk::white, 2147483647}, 80, 67, "Excessive padding preserves the inset on opposite sides");
     require_throw([&] { wm::apply_visible_watermark(host, silhouette, {wm::Position::top_center, 25, 50, wm::VisibleInk::black, -1}); },
                   "Reject negative visible padding");
     auto transparent_host = host;

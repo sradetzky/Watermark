@@ -44,7 +44,7 @@ struct VisibleWatermark {
     int size_percent = 15; // Longest edge, relative to the host's short side.
     int opacity_percent = 50;
     VisibleInk ink = VisibleInk::black;
-    std::optional<int> padding_px; // Empty: 2% of short side. Nonnegative pixels, capped to fit the host.
+    std::optional<int> padding_px; // Inset on all sides; empty: 2% of short side. Capped so the stamp fits inside.
 };
 // The transparent image's alpha defines the silhouette; RGB is ignored.
 Image apply_visible_watermark(const Image& host, const Image& silhouette,

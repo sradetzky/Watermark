@@ -70,9 +70,10 @@ work, while full real-photo validation remains open before declaring version 1 d
 
 Visible artwork also supports top center and bottom center, aligned by the horizontal
 midpoint of its trimmed bounds. GUI **Padding px** and CLI `--visible-padding` set
-a nonnegative distance to the selected image edge(s), capped per axis to keep the
-stamp inside the photo. Empty/omitted padding retains the 2% short-side default;
-center ignores padding. The detectable payload and manifest format are unchanged.
+a nonnegative inset on all four image edges, capped per axis so the stamp fits
+within the padded area. Empty/omitted padding retains the 2% short-side default.
+Center aligns within that area; symmetric padding preserves its midpoint.
+The detectable payload and manifest format are unchanged.
 
 ## Goal
 

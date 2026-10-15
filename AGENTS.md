@@ -128,8 +128,9 @@ Visible mode accepts a prepared transparent cutout. Alpha defines a black/white 
 RGB is ignored. Trim transparent bounds, retain aspect ratio, default longest edge
 15% of the host short side, black ink at 50% opacity, default edge padding 2%.
 Four corners, center, top center, and bottom center are supported. Optional nonnegative
-pixel padding replaces the default, is capped per axis to keep the stamp inside the
-host, and is ignored for center. GUI empty padding means automatic; CLI uses
+pixel padding replaces the default as an equal inset on all four edges, capped per
+axis so the stamp fits within the padded area. Center aligns within that area;
+symmetric padding preserves its midpoint. GUI empty padding means automatic; CLI uses
 `--visible-padding`. The application does not automatically segment complex photos.
 The supplied cutout was prepared with imagegen and remains local in `images/`.
 Use the source image or manifest to detect; pasted silhouettes alone are not proof.
