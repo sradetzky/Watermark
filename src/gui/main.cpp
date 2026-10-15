@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <atomic>
 #include <iomanip>
+#include <limits>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -61,10 +62,12 @@ public:
         make(force, L"BUTTON", L"Force rewrite / replace outputs", BS_AUTOCHECKBOX);
         make(visible, L"BUTTON", L"Visible watermark", BS_AUTOCHECKBOX);
         label(visible_position, L"Position");
-        combo(visible_position, {L"Bottom right", L"Bottom left", L"Top right", L"Top left", L"Center"});
+        combo(visible_position, {L"Bottom right", L"Bottom left", L"Top right", L"Top left", L"Center", L"Top center", L"Bottom center"});
         label(visible_size, L"Size %"); edit(visible_size, ES_NUMBER); SetWindowTextW(control(visible_size), L"15");
         label(visible_opacity, L"Opacity %"); edit(visible_opacity, ES_NUMBER); SetWindowTextW(control(visible_opacity), L"50");
         label(visible_ink, L"Color"); combo(visible_ink, {L"Black", L"White"});
+        label(visible_padding, L"Padding px"); edit(visible_padding, ES_NUMBER);
+        SendMessageW(control(visible_padding), EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Auto (2%)"));
         button(run, L"Embed", BS_DEFPUSHBUTTON); button(cancel, L"Cancel"); button(export_csv, L"Export CSV...");
         make(progress, PROGRESS_CLASSW, L"", 0);
         make(status, L"STATIC", L"Ready", SS_LEFT, false);
@@ -184,13 +187,15 @@ public:
         move(recursive, embedding() ? 445 : 20, embedding() ? 272 : 219, 200, 24); move(force, 445, 297, 310, 24);
         move(visible, 20, 333, 180, 26);
         MoveWindow(labels_.at(visible_position), scaled(210), scaled(337), scaled(65), scaled(20), TRUE);
-        move(visible_position, 280, 333, 140, 180);
+        move(visible_position, 280, 333, 140, 240);
         MoveWindow(labels_.at(visible_size), scaled(440), scaled(337), scaled(60), scaled(20), TRUE);
         move(visible_size, 505, 333, 60, 26);
         MoveWindow(labels_.at(visible_opacity), scaled(585), scaled(337), scaled(75), scaled(20), TRUE);
         move(visible_opacity, 665, 333, 60, 26);
         MoveWindow(labels_.at(visible_ink), scaled(20), scaled(374), scaled(50), scaled(20), TRUE);
         move(visible_ink, 75, 370, 130, 180);
+        MoveWindow(labels_.at(visible_padding), scaled(230), scaled(374), scaled(85), scaled(20), TRUE);
+        move(visible_padding, 320, 370, 100, 26);
         const int run_y = embedding() ? 415 : 260;
         move(run, 20, run_y, 110, 30); move(cancel, 140, run_y, 90, 30); move(export_csv, width - 145, run_y, 125, 30);
         move(progress, 245, run_y + 5, width - 410, 20); move(status, 20, run_y + 40, width - 40, 24);
@@ -257,16 +262,16 @@ private:
         EnableWindow(control(quality), !running_ && selection(format) == 1);
         EnableWindow(control(export_csv), !running_ && !last_job_.embedding && !last_csv_.empty());
         const bool show_visible = SendMessageW(control(visible), BM_GETCHECK, 0, 0) == BST_CHECKED;
-        for (int id : {visible_position, visible_size, visible_opacity, visible_ink}) {
+        for (int id : {visible_position, visible_size, visible_opacity, visible_ink, visible_padding}) {
             EnableWindow(control(id), !running_ && show_visible);
         }
         ShowWindow(control(export_csv), embed_page ? SW_HIDE : SW_SHOW);
         ShowWindow(control(results), embed_page ? SW_HIDE : SW_SHOW);
         for (int id : {output, output_browse, strength, format, quality, force, visible,
-                       visible_position, visible_size, visible_opacity, visible_ink}) {
+                       visible_position, visible_size, visible_opacity, visible_ink, visible_padding}) {
             ShowWindow(control(id), embed_page ? SW_SHOW : SW_HIDE);
         }
-        for (int id : {output, strength, format, quality, visible_position, visible_size, visible_opacity, visible_ink}) {
+        for (int id : {output, strength, format, quality, visible_position, visible_size, visible_opacity, visible_ink, visible_padding}) {
             ShowWindow(labels_.at(id), embed_page ? SW_SHOW : SW_HIDE);
         }
         SetWindowTextW(labels_.at(identity), embed_page || selection(identity_kind) == 0 ? L"Watermark image" : L"Watermark manifest");
@@ -330,6 +335,14 @@ private:
             };
             job.visible.size_percent = percent(visible_size); job.visible.opacity_percent = percent(visible_opacity);
             job.visible.ink = selection(visible_ink) == 0 ? VisibleInk::black : VisibleInk::white;
+            const auto padding = text(control(visible_padding));
+            if (!padding.empty()) {
+                if (padding.size() > 10 || padding.find_first_not_of(L"0123456789") != std::wstring::npos ||
+                    std::stoll(padding) > std::numeric_limits<int>::max()) {
+                    throw std::invalid_argument("Visible padding must be a nonnegative pixel count up to 2147483647, or empty for automatic padding.");
+                }
+                job.visible.padding_px = std::stoi(padding);
+            }
         }
         cancelled_.store(false);
         job.parameters.cancelled = [this] { return cancelled_.load(); };

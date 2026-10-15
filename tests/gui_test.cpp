@@ -144,9 +144,10 @@ int main(int argc, char** argv) {
         require(SendMessageW(gui.control(ids::key), EM_GETPASSWORDCHAR, 0, 0) != 0, "Passphrase is masked");
         gui.set(ids::identity, (root / "silhouette.png").wstring()); gui.set(ids::input, (root / "host.png").wstring());
         gui.set(ids::output, (root / "stamped").wstring()); gui.set(ids::key, L"GUI secret");
-        require(!IsWindowEnabled(gui.control(ids::visible_position)), "Visible controls disabled by default");
+        require(!IsWindowEnabled(gui.control(ids::visible_position)) && !IsWindowEnabled(gui.control(ids::visible_padding)), "Visible controls disabled by default");
         gui.click(ids::visible);
-        require(IsWindowEnabled(gui.control(ids::visible_position)), "Visibility checkbox enables silhouette settings");
+        require(IsWindowEnabled(gui.control(ids::visible_position)) && IsWindowEnabled(gui.control(ids::visible_padding)) &&
+                gui.text(ids::visible_padding).empty(), "Visibility checkbox enables silhouette settings with automatic padding");
         require(gui.text(ids::visible_opacity) == L"50" && SendMessageW(gui.control(ids::visible_ink), CB_GETCURSEL, 0, 0) == 0,
                 "GUI defaults to black at 50 percent opacity");
         gui.selection(ids::visible_position, 1); gui.set(ids::visible_size, L"20"); gui.set(ids::visible_opacity, L"50");
@@ -193,6 +194,24 @@ int main(int argc, char** argv) {
                 "GUI output contains expected mark");
         require(wm::load_image(root / "stamped" / "host.png.png").at(40, 460).r >
                 wm::load_image(root / "host.png").at(40, 460).r + 40, "GUI places visible silhouette at selected bottom-left position");
+        for (const auto top : {true, false}) {
+            const auto output = root / (top ? "top-center" : "bottom-center");
+            gui.set(ids::output, output.wstring()); gui.selection(ids::visible_position, top ? 5 : 6);
+            gui.set(ids::visible_padding, top ? L"23" : L"37");
+            if (capture && top) { gui.screenshot(fs::absolute("wmgui-embed.png")); }
+            gui.click(ids::run); gui.done();
+            require(gui.text(ids::status).rfind(L"Completed", 0) == 0 && fs::exists(output / "host.png.png"),
+                    "GUI embeds centered edge position with changed pixel padding");
+            const auto centered = wm::load_image(output / "host.png.png");
+            const auto host = wm::load_image(root / "host.png");
+            const int y0 = top ? 23 : 373;
+            require(centered.at(230, y0).r > host.at(230, y0).r + 40 &&
+                    centered.at(280, y0).r > host.at(280, y0).r + 40 &&
+                    std::abs(int(centered.at(256, y0 - 1).r) - int(host.at(256, y0 - 1).r)) < 10 &&
+                    std::abs(int(centered.at(215, y0).r) - int(host.at(215, y0).r)) < 10,
+                    "GUI passes centered position and exact pixel padding to the worker");
+        }
+        gui.set(ids::output, (root / "stamped").wstring());
         gui.detect_page(); gui.selection(ids::identity_kind, 1);
         gui.set(ids::identity, (root / "stamped" / "mark.json").wstring()); gui.set(ids::input, (root / "stamped").wstring());
         gui.click(ids::run); gui.done();

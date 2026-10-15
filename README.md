@@ -6,6 +6,9 @@ Experimental Windows tools that stamp a mark into images and later test whether 
 
 The core library, both command-line tools, and the Win32 window are implemented. Behavior and the robustness target are written down in [PLAN.md](PLAN.md); working context for future sessions is in [AGENTS.md](AGENTS.md).
 
+[Download Watermark v0.3.0 for Windows x64](https://github.com/sradetzky/Watermark/releases/tag/v0.3.0).
+This release adds top-center/bottom-center visible placement and configurable pixel padding in the GUI and CLI.
+
 ## Tools
 
 | Tool | Role |
@@ -111,11 +114,15 @@ transparent openings and trimming empty borders. Prepare the cutout before using
 it: the application does not segment a person from a landscape JPEG automatically.
 Opaque photographs and entirely empty cutouts are rejected.
 
-Choose **Bottom right** (default), **Bottom left**, **Top right**, **Top left**, or
-**Center**. **Size %** controls the longest edge relative to the photo's short side
+Choose **Bottom right** (default), **Bottom left**, **Top right**, **Top left**,
+**Center**, **Top center**, or **Bottom center**. The latter two align the artwork's
+horizontal midpoint with the photo's midpoint. **Size %** controls the longest edge relative to the photo's short side
 (1..50, default 15); **Opacity %** is 1..100 (default 50). **Color** defaults to
-black for a subtle thumbprint; white is available for dark photos. Corner marks have a 2%
-margin. The original aspect ratio is retained. Uncheck visibility for the original
+black for a subtle thumbprint; white is available for dark photos. **Padding px** sets
+the distance from the trimmed artwork to the selected photo edge(s) in image pixels;
+0 places it directly at the edge. Leave the field empty for the default 2% of the
+photo's short side. Excessive padding is capped per axis so the entire stamp fits.
+**Center** ignores padding. The original aspect ratio is retained. Uncheck visibility for the original
 invisible-only workflow.
 
 The visible stamp is applied before embedding the detectable payload. Detection
@@ -135,7 +142,10 @@ Default usage needs no secret:
 ```
 
 Omit `--visible` for invisible-only output. Optional `--visible-size` and
-`--visible-opacity` use the same percentages as the GUI. `--visible-color black|white`
+`--visible-opacity` use the same percentages as the GUI. Use
+`--visible-position top-center|bottom-center` for the new centered edge positions and
+`--visible-padding 24` for a 24-pixel edge distance (omit for automatic 2% padding).
+`--visible-color black|white`
 selects the ink. Use `--in stamped --report report.csv` for batch detection.
 The legacy `--source` spelling remains an alias for `--watermark`.
 Advanced CLI usage can still choose different artwork with `--visible-image` instead

@@ -66,6 +66,14 @@ work, while full real-photo validation remains open before declaring version 1 d
 - Local examples and the prepared photographer cutout remain in ignored `images/`
   and `test-output/`. Broader photo-corpus validation remains open.
 
+### Visible placement extension — 2026-10-15
+
+Visible artwork also supports top center and bottom center, aligned by the horizontal
+midpoint of its trimmed bounds. GUI **Padding px** and CLI `--visible-padding` set
+a nonnegative distance to the selected image edge(s), capped per axis to keep the
+stamp inside the photo. Empty/omitted padding retains the 2% short-side default;
+center ignores padding. The detectable payload and manifest format are unchanged.
+
 ## Goal
 
 Stamp a watermark derived from a source image into host photos so a second tool can still recognize it after compression and ordinary manipulation, with measured accuracy.

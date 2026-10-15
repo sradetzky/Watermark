@@ -195,9 +195,9 @@ void visible_watermark(const TestFiles& files) {
     const auto same = [](const wm::Pixel& a, const wm::Pixel& b) {
         return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
     };
-    const std::array<wm::Position, 5> positions = {wm::Position::bottom_right, wm::Position::bottom_left,
-        wm::Position::top_right, wm::Position::top_left, wm::Position::center};
-    const std::array<std::pair<int, int>, 5> origins = {std::pair{157, 117}, {3, 117}, {157, 3}, {3, 3}, {80, 60}};
+    const std::array<wm::Position, 7> positions = {wm::Position::bottom_right, wm::Position::bottom_left,
+        wm::Position::top_right, wm::Position::top_left, wm::Position::center, wm::Position::top_center, wm::Position::bottom_center};
+    const std::array<std::pair<int, int>, 7> origins = {std::pair{157, 117}, {3, 117}, {157, 3}, {3, 3}, {80, 60}, {80, 3}, {80, 117}};
     for (std::size_t i = 0; i < positions.size(); ++i) {
         const auto marked = wm::apply_visible_watermark(host, silhouette, {positions[i], 25, 50, wm::VisibleInk::white});
         const auto [x0, y0] = origins[i];
@@ -213,6 +213,32 @@ void visible_watermark(const TestFiles& files) {
         }
         require(outside_same, "Visible mark changes only its placement bounds");
     }
+    wm::Image rectangle(8, 6), odd_host(201, 161);
+    for (auto& pixel : rectangle.pixels) { pixel.a = 0; }
+    for (int y = 1; y < 5; ++y) {
+        for (int x = 1; x < 7; ++x) { rectangle.at(x, y).a = 255; }
+    }
+    const auto check_bounds = [&](const wm::VisibleWatermark& options, int x0, int y0, const std::string& name) {
+        const auto marked = wm::apply_visible_watermark(odd_host, rectangle, options);
+        bool correct = true;
+        for (int y = 0; y < odd_host.height; ++y) {
+            for (int x = 0; x < odd_host.width; ++x) {
+                const bool inside = x >= x0 && x < x0 + 40 && y >= y0 && y < y0 + 27;
+                correct = correct && same(marked.at(x, y), inside ? wm::Pixel{255, 255, 255, 255} : odd_host.at(x, y));
+            }
+        }
+        require(correct, name);
+    };
+    const std::array<std::pair<int, int>, 7> padded_origins = {std::pair{148, 121}, {13, 121}, {148, 13}, {13, 13}, {80, 67}, {80, 13}, {80, 121}};
+    for (std::size_t i = 0; i < positions.size(); ++i) {
+        const auto [x0, y0] = padded_origins[i];
+        check_bounds({positions[i], 25, 100, wm::VisibleInk::white, 13}, x0, y0,
+                     "Pixel padding and rectangular artwork at position " + std::to_string(i));
+    }
+    check_bounds({wm::Position::bottom_center, 25, 100, wm::VisibleInk::white, 0}, 80, 134, "Zero padding reaches the bottom edge");
+    check_bounds({wm::Position::top_left, 25, 100, wm::VisibleInk::white, 2147483647}, 161, 134, "Excessive padding keeps the whole stamp inside the host");
+    require_throw([&] { wm::apply_visible_watermark(host, silhouette, {wm::Position::top_center, 25, 50, wm::VisibleInk::black, -1}); },
+                  "Reject negative visible padding");
     auto transparent_host = host;
     for (auto& pixel : transparent_host.pixels) { pixel.a = 0; }
     const auto rgba = wm::apply_visible_watermark(transparent_host, silhouette, {wm::Position::top_left, 25, 50, wm::VisibleInk::white});
@@ -245,9 +271,11 @@ void visible_watermark(const TestFiles& files) {
     const auto marked = wm::embed(prepared, payload, parameters);
     require(wm::psnr(prepared, marked) >= 40, "Visible mode preserves keyed embedding quality");
     check_detection(marked, payload, parameters, "Visible plus keyed PNG recovery");
-    for (const auto position : {wm::Position::bottom_left, wm::Position::top_right, wm::Position::top_left, wm::Position::center}) {
+    for (const auto position : {wm::Position::bottom_left, wm::Position::top_right, wm::Position::top_left, wm::Position::center,
+                               wm::Position::top_center, wm::Position::bottom_center}) {
         wm::VisibleWatermark placement;
         placement.position = position;
+        placement.padding_px = 23;
         check_detection(wm::embed(wm::apply_visible_watermark(scene_host, silhouette, placement), payload, parameters),
                         payload, parameters, "Visible plus keyed recovery at position " + std::to_string(static_cast<int>(position)));
     }

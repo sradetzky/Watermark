@@ -37,13 +37,14 @@ void save_image(const Image& image, const std::filesystem::path& path,
 Image resize_image(const Image& image, int width, int height);
 double psnr(const Image& original, const Image& modified);
 
-enum class Position { bottom_right, bottom_left, top_right, top_left, center };
+enum class Position { bottom_right, bottom_left, top_right, top_left, center, top_center, bottom_center };
 enum class VisibleInk { black, white };
 struct VisibleWatermark {
     Position position = Position::bottom_right;
     int size_percent = 15; // Longest edge, relative to the host's short side.
     int opacity_percent = 50;
     VisibleInk ink = VisibleInk::black;
+    std::optional<int> padding_px; // Empty: 2% of short side. Nonnegative pixels, capped to fit the host.
 };
 // The transparent image's alpha defines the silhouette; RGB is ignored.
 Image apply_visible_watermark(const Image& host, const Image& silhouette,

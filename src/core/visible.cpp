@@ -13,6 +13,9 @@ Image apply_visible_watermark(const Image& host, const Image& silhouette,
         (options.ink != VisibleInk::black && options.ink != VisibleInk::white)) {
         throw std::invalid_argument("Visible size must be 1..50 percent, opacity 1..100 percent, and ink black or white.");
     }
+    if (options.padding_px && *options.padding_px < 0) {
+        throw std::invalid_argument("Visible padding must be a nonnegative pixel count.");
+    }
     const auto check_cancelled = [&] { if (cancelled && cancelled()) { throw OperationCancelled(); } };
     int left = silhouette.width, top = silhouette.height, right = -1, bottom = -1;
     bool transparent = false;
@@ -38,14 +41,18 @@ Image apply_visible_watermark(const Image& host, const Image& silhouette,
     const auto stamp = resize_image(cropped, std::max(1, static_cast<int>(std::round(cropped.width * scale))),
                                    std::max(1, static_cast<int>(std::round(cropped.height * scale))));
     check_cancelled();
-    const int margin = short_side * 2 / 100;
-    int x0 = margin, y0 = margin;
+    const int padding = options.padding_px.value_or(short_side * 2 / 100);
+    const int padding_x = std::min(padding, host.width - stamp.width);
+    const int padding_y = std::min(padding, host.height - stamp.height);
+    int x0 = padding_x, y0 = padding_y;
     switch (options.position) {
-    case Position::bottom_right: x0 = host.width - margin - stamp.width; y0 = host.height - margin - stamp.height; break;
-    case Position::bottom_left: y0 = host.height - margin - stamp.height; break;
-    case Position::top_right: x0 = host.width - margin - stamp.width; break;
+    case Position::bottom_right: x0 = host.width - padding_x - stamp.width; y0 = host.height - padding_y - stamp.height; break;
+    case Position::bottom_left: y0 = host.height - padding_y - stamp.height; break;
+    case Position::top_right: x0 = host.width - padding_x - stamp.width; break;
     case Position::top_left: break;
     case Position::center: x0 = (host.width - stamp.width) / 2; y0 = (host.height - stamp.height) / 2; break;
+    case Position::top_center: x0 = (host.width - stamp.width) / 2; break;
+    case Position::bottom_center: x0 = (host.width - stamp.width) / 2; y0 = host.height - padding_y - stamp.height; break;
     default: throw std::invalid_argument("Invalid visible watermark position.");
     }
     Image result = host;

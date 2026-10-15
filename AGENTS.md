@@ -20,8 +20,8 @@ Implemented:
   `mark.json`, skip-if-present, PNG/JPEG output, CSV reporting.
 - `wmgui`: native Embed/Detect tabs, shell file/folder dialogs, masked passphrases
   or key files, source-derived keys, background jobs, progress, cancellation,
-  results, and CSV export. Optional visible silhouette with five positions,
-  size and opacity controls; detection verifies the accompanying payload.
+  results, and CSV export. Optional visible silhouette with seven positions,
+  size, opacity, and pixel padding controls; detection verifies the accompanying payload.
 - CTest core robustness, real-process CLI, and native-window GUI tests.
 
 One supplied concert photo passes source-key visible mode in PNG/JPEG 70; JPEG 50
@@ -126,8 +126,11 @@ public key as authentication, and never repair CRC bits using the expected hash.
 
 Visible mode accepts a prepared transparent cutout. Alpha defines a black/white shape;
 RGB is ignored. Trim transparent bounds, retain aspect ratio, default longest edge
-15% of the host short side, black ink at 50% opacity, corner margin 2%. Four corners and center
-are supported. The application does not automatically segment complex photos.
+15% of the host short side, black ink at 50% opacity, default edge padding 2%.
+Four corners, center, top center, and bottom center are supported. Optional nonnegative
+pixel padding replaces the default, is capped per axis to keep the stamp inside the
+host, and is ignored for center. GUI empty padding means automatic; CLI uses
+`--visible-padding`. The application does not automatically segment complex photos.
 The supplied cutout was prepared with imagegen and remains local in `images/`.
 Use the source image or manifest to detect; pasted silhouettes alone are not proof.
 The >=40 dB gate in visible mode measures keyed embedding against the visible host.

@@ -161,6 +161,28 @@ int main() {
         require(run(detect, {L"--mark", L"visible/mark.json", L"--key-file", L"secret.txt", L"--in", L"visible",
                 L"--report", L"visible.csv"}, root) == 0 && read(root / "visible.csv").find(",true,") != std::string::npos,
                 "CLI detects visible mode with unchanged manifest");
+        for (const auto top : {true, false}) {
+            const std::wstring output = top ? L"top-center" : L"bottom-center";
+            require(run(embed, {L"--watermark", L"silhouette.png", L"--visible", L"--in", L"photos/photo, one.png",
+                    L"--out", output, L"--visible-position", output, L"--visible-padding", top ? L"23" : L"0",
+                    L"--visible-size", L"20", L"--visible-opacity", L"100", L"--visible-color", L"white"}, root) == 0,
+                    "CLI accepts centered edge position and pixel padding");
+            const auto centered = wm::load_image(root / output / "photo, one.png.png");
+            const int edge_y = top ? 23 : 511;
+            require(centered.at(230, edge_y).r > 240 && centered.at(280, edge_y).r > 240 &&
+                    std::abs(int(centered.at(215, edge_y).r) - int(original.at(215, edge_y).r)) < 10 &&
+                    std::abs(int(centered.at(295, edge_y).r) - int(original.at(295, edge_y).r)) < 10 &&
+                    std::abs(int(centered.at(256, top ? 22 : 409).r) - int(original.at(256, top ? 22 : 409).r)) < 10,
+                    "CLI centers artwork by its midpoint with exact edge padding");
+        }
+        for (const auto padding : {L"-1", L"1.5", L"abc", L"2147483648", L"99999999999999999999"}) {
+            require(run(embed, {L"--watermark", L"silhouette.png", L"--visible", L"--in", L"photos/photo, one.png",
+                    L"--out", L"invalid-padding", L"--visible-padding", padding}, root) == 2 &&
+                    !fs::exists(root / "invalid-padding"), "CLI rejects invalid pixel padding before output creation");
+        }
+        require(run(embed, {L"--watermark", L"silhouette.png", L"--in", L"photos/photo, one.png",
+                L"--out", L"invalid-padding", L"--visible-padding", L"10"}, root) == 2,
+                "CLI requires visible mode for pixel padding");
         require(run(embed, {L"--source", L"source.png", L"--key-file", L"secret.txt", L"--in", L"photos/photo, one.png",
                 L"--out", L"invalid-visible", L"--visible-image", L"silhouette.png", L"--visible-position", L"nowhere"}, root) == 2,
                 "CLI rejects invalid visible position");

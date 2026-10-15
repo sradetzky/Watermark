@@ -2,6 +2,7 @@
 #include "app/jobs.h"
 
 #include <iostream>
+#include <limits>
 #include <map>
 #include <set>
 
@@ -29,7 +30,7 @@ struct Options {
 Options parse(int argc, wchar_t** argv, bool embedding) {
     const std::set<std::wstring> common = {L"--watermark", L"--source", L"--key-file", L"--passphrase", L"--in"};
     const std::set<std::wstring> embed_values = {L"--out", L"--format", L"--quality", L"--strength",
-        L"--visible-image", L"--visible-position", L"--visible-size", L"--visible-opacity", L"--visible-color"};
+        L"--visible-image", L"--visible-position", L"--visible-size", L"--visible-opacity", L"--visible-color", L"--visible-padding"};
     const std::set<std::wstring> detect_values = {L"--mark", L"--report"};
     Options options;
     std::set<std::wstring> seen;
@@ -71,10 +72,11 @@ void help(bool embedding) {
                      "  --strength low|default|high\n"
                      "  --visible               Also stamp the watermark image (transparent PNG)\n"
                      "  --visible-image PNG     Alternative visible artwork (legacy option)\n"
-                     "  --visible-position bottom-right|bottom-left|top-right|top-left|center\n"
+                     "  --visible-position bottom-right|bottom-left|top-right|top-left|center|top-center|bottom-center\n"
                      "  --visible-size 1..50     Percent of short side (longest stamp edge; default 15)\n"
                      "  --visible-opacity 1..100 Percent opacity (default 50)\n"
                      "  --visible-color black|white (default black)\n"
+                     "  --visible-padding PX     Nonnegative edge distance, capped to fit (default 2% of short side; center ignores padding)\n"
                      "  --force                 Rewrite an existing mark; replace existing output\n";
     } else {
         std::cout << "wmdetect --watermark logo.png --in images\n"
@@ -125,12 +127,14 @@ int run(int argc, wchar_t** argv, bool embedding) {
                 job.visible_image = job.source;
             }
             if (job.visible_image.empty() && (options.contains(L"--visible-position") ||
-                options.contains(L"--visible-size") || options.contains(L"--visible-opacity") || options.contains(L"--visible-color"))) {
+                options.contains(L"--visible-size") || options.contains(L"--visible-opacity") || options.contains(L"--visible-color") ||
+                options.contains(L"--visible-padding"))) {
                 throw std::invalid_argument("Visible settings require --visible or --visible-image.");
             }
             const std::map<std::wstring, Position> positions = {
                 {L"bottom-right", Position::bottom_right}, {L"bottom-left", Position::bottom_left},
-                {L"top-right", Position::top_right}, {L"top-left", Position::top_left}, {L"center", Position::center}};
+                {L"top-right", Position::top_right}, {L"top-left", Position::top_left}, {L"center", Position::center},
+                {L"top-center", Position::top_center}, {L"bottom-center", Position::bottom_center}};
             const auto position = positions.find(options.get(L"--visible-position", L"bottom-right"));
             if (position == positions.end()) { throw std::invalid_argument("Invalid visible watermark position."); }
             job.visible.position = position->second;
@@ -146,6 +150,14 @@ int run(int argc, wchar_t** argv, bool embedding) {
             };
             job.visible.size_percent = percent(L"--visible-size", L"15");
             job.visible.opacity_percent = percent(L"--visible-opacity", L"50");
+            if (options.contains(L"--visible-padding")) {
+                const auto value = options.get(L"--visible-padding");
+                if (value.empty() || value.size() > 10 || value.find_first_not_of(L"0123456789") != std::wstring::npos ||
+                    std::stoll(value) > std::numeric_limits<int>::max()) {
+                    throw std::invalid_argument("Visible padding must be a nonnegative pixel count up to 2147483647.");
+                }
+                job.visible.padding_px = std::stoi(value);
+            }
         } else {
             if ((!job.source.empty()) == options.contains(L"--mark")) {
                 throw std::invalid_argument("Supply exactly one of --watermark and --mark.");
