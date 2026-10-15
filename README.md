@@ -6,8 +6,8 @@ Experimental Windows tools that stamp a mark into images and later test whether 
 
 The core library, both command-line tools, and the Win32 window are implemented. Behavior and the robustness target are written down in [PLAN.md](PLAN.md); working context for future sessions is in [AGENTS.md](AGENTS.md).
 
-[Download Watermark v0.3.0 for Windows x64](https://github.com/sradetzky/Watermark/releases/tag/v0.3.0).
-This release adds top-center/bottom-center visible placement and configurable pixel padding in the GUI and CLI.
+[Download Watermark v0.3.1 for Windows x64](https://github.com/sradetzky/Watermark/releases/tag/v0.3.1).
+This release corrects visible watermark padding to apply as an inset on all four image edges, including the limits for large values.
 
 ## Tools
 

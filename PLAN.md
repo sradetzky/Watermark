@@ -75,6 +75,9 @@ within the padded area. Empty/omitted padding retains the 2% short-side default.
 Center aligns within that area; symmetric padding preserves its midpoint.
 The detectable payload and manifest format are unchanged.
 
+v0.3.1 applies the inset consistently on opposite edges, including large padding
+values, and clarifies the placement semantics in the documentation and CLI help.
+
 ## Goal
 
 Stamp a watermark derived from a source image into host photos so a second tool can still recognize it after compression and ordinary manipulation, with measured accuracy.
